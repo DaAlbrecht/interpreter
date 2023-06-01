@@ -37,6 +37,12 @@ impl Lexer {
             b')' => TokenType::RPAREN,
             b',' => TokenType::COMMA,
             b'+' => TokenType::PLUS,
+            b'-' => TokenType::MINUS,
+            b'!' => TokenType::BANG,
+            b'*' => TokenType::ASTERISK,
+            b'/' => TokenType::SLASH,
+            b'<' => TokenType::LT,
+            b'>' => TokenType::GT,
             b'{' => TokenType::LBRACE,
             b'}' => TokenType::RBRACE,
             b'a'..=b'z' | b'A'..=b'Z' | b'_' => {
@@ -108,6 +114,8 @@ mod tests {
             };
 
             let result = add(five, ten);
+            !-/*5;
+            5 < 10 > 5;
         "###;
 
         println!("{}", input);
@@ -118,11 +126,13 @@ mod tests {
             TokenType::ASSIGN,
             TokenType::INT("5".into()),
             TokenType::SEMICOLON,
+            //--------------------------------//
             TokenType::LET,
             TokenType::IDENT("ten".into()),
             TokenType::ASSIGN,
             TokenType::INT("10".into()),
             TokenType::SEMICOLON,
+            //--------------------------------//
             TokenType::LET,
             TokenType::IDENT("add".into()),
             TokenType::ASSIGN,
@@ -139,6 +149,7 @@ mod tests {
             TokenType::SEMICOLON,
             TokenType::RBRACE,
             TokenType::SEMICOLON,
+            //--------------------------------//
             TokenType::LET,
             TokenType::IDENT("result".into()),
             TokenType::ASSIGN,
@@ -148,6 +159,19 @@ mod tests {
             TokenType::COMMA,
             TokenType::IDENT("ten".into()),
             TokenType::RPAREN,
+            TokenType::SEMICOLON,
+            //--------------------------------//
+            TokenType::BANG,
+            TokenType::MINUS,
+            TokenType::SLASH,
+            TokenType::ASTERISK,
+            TokenType::INT("5".into()),
+            TokenType::SEMICOLON,
+            TokenType::INT("5".into()),
+            TokenType::LT,
+            TokenType::INT("10".into()),
+            TokenType::GT,
+            TokenType::INT("5".into()),
             TokenType::SEMICOLON,
             TokenType::EOF,
         ];
