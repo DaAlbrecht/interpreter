@@ -1,3 +1,5 @@
+use std::{print, println};
+
 use super::tokens::TokenType;
 
 struct Lexer {
@@ -21,6 +23,13 @@ impl Lexer {
     }
 
     pub fn next_token(&mut self) -> TokenType {
+        //skip whitespace
+
+        while self.ch.is_ascii_whitespace() {
+            self.read_char();
+        }
+
+        println!("next_token: {}", self.ch as char);
         let token = match self.ch {
             b'=' => TokenType::ASSIGN,
             b';' => TokenType::SEMICOLON,
@@ -30,6 +39,15 @@ impl Lexer {
             b'+' => TokenType::PLUS,
             b'{' => TokenType::LBRACE,
             b'}' => TokenType::RBRACE,
+            b'a'..=b'z' | b'A'..=b'Z' | b'_' => {
+                let ident = self.read_identifier();
+                return match ident.as_str() {
+                    "let" => TokenType::LET,
+                    "fn" => TokenType::FUNCTION,
+                    _ => TokenType::IDENT(ident),
+                };
+            }
+            b'0'..=b'9' => return TokenType::INT(self.read_number()),
             0 => TokenType::EOF,
             _ => TokenType::ILLEGAL,
         };
@@ -46,6 +64,29 @@ impl Lexer {
         self.position = self.read_position;
         self.read_position += 1;
     }
+
+    fn read_identifier(&mut self) -> String {
+        let position = self.position;
+        while self.ch.is_ascii_alphabetic() | (self.ch == b'_') {
+            self.read_char();
+        }
+
+        self.input[position..self.position]
+            .iter()
+            .map(|&c| c as char)
+            .collect()
+    }
+
+    fn read_number(&mut self) -> String {
+        let position = self.position;
+        while self.ch.is_ascii_digit() {
+            self.read_char();
+        }
+        self.input[position..self.position]
+            .iter()
+            .map(|&c| c as char)
+            .collect()
+    }
 }
 
 #[cfg(test)]
@@ -58,16 +99,55 @@ mod tests {
 
     #[test]
     fn test_next_token() {
-        let input = "=+(){},;";
+        let input = r###"
+            let five = 5;
+            let ten = 10;
+
+            let add = fn(x, y) {
+              x + y;
+            };
+
+            let result = add(five, ten);
+        "###;
+
+        println!("{}", input);
 
         let tokens = vec![
+            TokenType::LET,
+            TokenType::IDENT("five".into()),
             TokenType::ASSIGN,
-            TokenType::PLUS,
+            TokenType::INT("5".into()),
+            TokenType::SEMICOLON,
+            TokenType::LET,
+            TokenType::IDENT("ten".into()),
+            TokenType::ASSIGN,
+            TokenType::INT("10".into()),
+            TokenType::SEMICOLON,
+            TokenType::LET,
+            TokenType::IDENT("add".into()),
+            TokenType::ASSIGN,
+            TokenType::FUNCTION,
             TokenType::LPAREN,
+            TokenType::IDENT("x".into()),
+            TokenType::COMMA,
+            TokenType::IDENT("y".into()),
             TokenType::RPAREN,
             TokenType::LBRACE,
+            TokenType::IDENT("x".into()),
+            TokenType::PLUS,
+            TokenType::IDENT("y".into()),
+            TokenType::SEMICOLON,
             TokenType::RBRACE,
+            TokenType::SEMICOLON,
+            TokenType::LET,
+            TokenType::IDENT("result".into()),
+            TokenType::ASSIGN,
+            TokenType::IDENT("add".into()),
+            TokenType::LPAREN,
+            TokenType::IDENT("five".into()),
             TokenType::COMMA,
+            TokenType::IDENT("ten".into()),
+            TokenType::RPAREN,
             TokenType::SEMICOLON,
             TokenType::EOF,
         ];

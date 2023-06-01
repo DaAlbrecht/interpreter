@@ -1,14 +1,11 @@
 #[derive(Debug, PartialEq)]
 pub enum TokenType {
-    Integer(usize),
-    Identifier(String),
-
     ILLEGAL,
     EOF,
 
     // Identifiers + literals
-    IDENT,
-    INT,
+    IDENT(String),
+    INT(String),
 
     // Operators
     ASSIGN,
