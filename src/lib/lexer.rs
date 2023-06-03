@@ -2,15 +2,28 @@ use std::{print, println};
 
 use super::tokens::TokenType;
 
-struct Lexer {
+pub struct Lexer {
     input: Vec<u8>,
     position: usize,
     read_position: usize,
     ch: u8,
 }
 
+impl Iterator for Lexer {
+    type Item = TokenType;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let token = self.next_token();
+        if token == TokenType::EOF {
+            None
+        } else {
+            Some(token)
+        }
+    }
+}
+
 impl Lexer {
-    fn new(input: String) -> Lexer {
+    pub fn new(input: String) -> Lexer {
         let mut lexer = Lexer {
             input: input.into(),
             position: 0,
@@ -29,7 +42,6 @@ impl Lexer {
             self.read_char();
         }
 
-        println!("next_token: {}", self.ch as char);
         let token = match self.ch {
             b'=' => match self.peek() {
                 b'=' => {
