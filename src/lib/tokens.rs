@@ -16,6 +16,8 @@ pub enum TokenType {
     SLASH,
     GT,
     LT,
+    EQ,
+    NOT_EQ,
 
     // Delimiters
     COMMA,
@@ -29,4 +31,9 @@ pub enum TokenType {
     // Keywords
     FUNCTION,
     LET,
+    TRUE,
+    FALSE,
+    IF,
+    ELSE,
+    RETURN,
 }

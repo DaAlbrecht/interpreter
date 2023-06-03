@@ -31,14 +31,26 @@ impl Lexer {
 
         println!("next_token: {}", self.ch as char);
         let token = match self.ch {
-            b'=' => TokenType::ASSIGN,
+            b'=' => match self.peek() {
+                b'=' => {
+                    self.read_char();
+                    TokenType::EQ
+                }
+                _ => TokenType::ASSIGN,
+            },
             b';' => TokenType::SEMICOLON,
             b'(' => TokenType::LPAREN,
             b')' => TokenType::RPAREN,
             b',' => TokenType::COMMA,
             b'+' => TokenType::PLUS,
             b'-' => TokenType::MINUS,
-            b'!' => TokenType::BANG,
+            b'!' => match self.peek() {
+                b'=' => {
+                    self.read_char();
+                    TokenType::NOT_EQ
+                }
+                _ => TokenType::BANG,
+            },
             b'*' => TokenType::ASTERISK,
             b'/' => TokenType::SLASH,
             b'<' => TokenType::LT,
@@ -50,6 +62,11 @@ impl Lexer {
                 return match ident.as_str() {
                     "let" => TokenType::LET,
                     "fn" => TokenType::FUNCTION,
+                    "true" => TokenType::TRUE,
+                    "false" => TokenType::FALSE,
+                    "if" => TokenType::IF,
+                    "else" => TokenType::ELSE,
+                    "return" => TokenType::RETURN,
                     _ => TokenType::IDENT(ident),
                 };
             }
@@ -93,6 +110,14 @@ impl Lexer {
             .map(|&c| c as char)
             .collect()
     }
+
+    fn peek(&self) -> u8 {
+        if self.read_position >= self.input.len() {
+            0
+        } else {
+            self.input[self.read_position]
+        }
+    }
 }
 
 #[cfg(test)]
@@ -116,6 +141,15 @@ mod tests {
             let result = add(five, ten);
             !-/*5;
             5 < 10 > 5;
+
+            if (5 < 10) {
+                return true;
+            } else {
+                return false;
+            }
+
+            10 == 10;
+            10 != 9;
         "###;
 
         println!("{}", input);
@@ -173,6 +207,34 @@ mod tests {
             TokenType::GT,
             TokenType::INT("5".into()),
             TokenType::SEMICOLON,
+            //--------------------------------//
+            TokenType::IF,
+            TokenType::LPAREN,
+            TokenType::INT("5".into()),
+            TokenType::LT,
+            TokenType::INT("10".into()),
+            TokenType::RPAREN,
+            TokenType::LBRACE,
+            TokenType::RETURN,
+            TokenType::TRUE,
+            TokenType::SEMICOLON,
+            TokenType::RBRACE,
+            TokenType::ELSE,
+            TokenType::LBRACE,
+            TokenType::RETURN,
+            TokenType::FALSE,
+            TokenType::SEMICOLON,
+            TokenType::RBRACE,
+            //--------------------------------//
+            TokenType::INT("10".into()),
+            TokenType::EQ,
+            TokenType::INT("10".into()),
+            TokenType::SEMICOLON,
+            TokenType::INT("10".into()),
+            TokenType::NOT_EQ,
+            TokenType::INT("9".into()),
+            TokenType::SEMICOLON,
+            //--------------------------------//
             TokenType::EOF,
         ];
 
