@@ -1,4 +1,8 @@
-use super::{ast, lexer::Lexer, tokens::TokenType};
+use super::{
+    ast::{self, Statement},
+    lexer::Lexer,
+    tokens::TokenType,
+};
 
 struct Parser<'a> {
     lexer: &'a mut Lexer,
@@ -42,6 +46,7 @@ impl<'a> Parser<'a> {
     fn parse_statement(&mut self) -> Option<ast::Statement> {
         match self.curr_token {
             Some(TokenType::LET) => self.parse_let_statement(),
+            Some(TokenType::RETURN) => self.parse_return_statement(),
             _ => None,
         }
     }
@@ -59,8 +64,7 @@ impl<'a> Parser<'a> {
         if !self.expect_peek(TokenType::ASSIGN) {
             return None;
         }
-        // TODO: We're skipping the expressions until we
-        // encounter a semicolon”
+        // TODO: We're skipping the expressions until we  encounter a semicolon for now
 
         while !self.curr_token_is(TokenType::SEMICOLON) {
             self.next_token();
@@ -72,6 +76,17 @@ impl<'a> Parser<'a> {
         };
 
         Some(ast::Statement::LetStatement(let_statement))
+    }
+    fn parse_return_statement(&mut self) -> Option<ast::Statement> {
+        self.next_token();
+
+        // TODO: We're skipping the expressions until we encounter a semicolon for now
+
+        while !self.curr_token_is(TokenType::SEMICOLON) {
+            self.next_token();
+        }
+
+        Some(ast::Statement::ReturnStatement(ast::AllExpression::Int(5))) // we do not care about statements yet -> 5 is just a placeholder
     }
 
     fn expect_peek(&mut self, token_type: TokenType) -> bool {
@@ -146,6 +161,37 @@ mod test {
                 ast::Statement::LetStatement(let_statement) => {
                     assert_eq!(let_statement.name, test.to_string());
                 }
+                _ => panic!("not a let statement"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_return_statements() {
+        let input = r#"
+         return 5;
+        return 10;
+        return 993322;
+        "#
+        .to_string();
+
+        let mut lexer = Lexer::new(input);
+        let mut parser = Parser::new(&mut lexer);
+
+        let program = parser.parse_program();
+
+        assert!(program.is_some());
+
+        let program = program.unwrap();
+
+        assert_eq!(program.statements.len(), 3);
+
+        for statement in program.statements {
+            match statement {
+                ast::Statement::ReturnStatement(_) => {
+                    assert!(true);
+                }
+                _ => panic!("not a return statement"),
             }
         }
     }

@@ -8,6 +8,7 @@ pub struct Program {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
     LetStatement(LetStatement),
+    ReturnStatement(AllExpression),
 }
 
 #[derive(Debug, Clone, PartialEq)]
