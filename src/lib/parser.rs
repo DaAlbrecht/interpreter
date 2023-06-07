@@ -11,6 +11,16 @@ struct Parser<'a> {
     peek_errors: Vec<String>,
 }
 
+enum Presedence {
+    LOWEST,
+    EQUALS,      // ==
+    LESSGREATER, // > or <
+    SUM,         // +
+    PRODUCT,     // *
+    PREFIX,      // -X or !X
+    CALL,        // myFunction(X)
+}
+
 impl<'a> Parser<'a> {
     fn new(lexer: &'_ mut Lexer) -> Parser {
         let mut parser = Parser {
@@ -25,9 +35,35 @@ impl<'a> Parser<'a> {
 
         parser
     }
+
     fn next_token(&mut self) {
         self.curr_token = self.peek_token.take();
         self.peek_token = Some(self.lexer.next_token());
+    }
+
+    fn curr_token_is(&self, token_type: TokenType) -> bool {
+        self.curr_token == Some(token_type)
+    }
+
+    fn expect_peek(&mut self, token_type: TokenType) -> bool {
+        match self.peek_token {
+            Some(TokenType::IDENT(_)) => {
+                self.next_token();
+                true
+            }
+            Some(TokenType::ASSIGN) => {
+                self.next_token();
+                true
+            }
+            Some(TokenType::SEMICOLON) => {
+                self.next_token();
+                true
+            }
+            _ => {
+                self.peek_error(token_type);
+                false
+            }
+        }
     }
 
     pub fn parse_program(&mut self) -> Option<ast::Program> {
@@ -47,10 +83,32 @@ impl<'a> Parser<'a> {
         match self.curr_token {
             Some(TokenType::LET) => self.parse_let_statement(),
             Some(TokenType::RETURN) => self.parse_return_statement(),
-            _ => None,
+            _ => self.parse_expression_statement(),
         }
     }
 
+    fn parse_expression_statement(&mut self) -> Option<ast::Statement> {
+        let expression = self.parse_expression(Presedence::LOWEST);
+
+        if self.curr_token_is(TokenType::SEMICOLON) {
+            self.next_token();
+        }
+
+        Some(ast::Statement::ExpressionStatement(expression.unwrap()))
+    }
+
+    fn peek_error(&mut self, token_type: TokenType) {
+        let msg = format!(
+            "expected next token to be {:?}, got {:?} instead",
+            token_type, self.peek_token
+        );
+
+        self.peek_errors.push(msg); // not sure if i want to actually keep the errors here or just
+                                    // print them and move on
+        println!("peek_errors: {:?}", self.peek_errors);
+    }
+
+    //-------------------- Parsing statment functions --------------------//
     fn parse_let_statement(&mut self) -> Option<ast::Statement> {
         if !self.expect_peek(TokenType::IDENT("".to_string())) {
             return None;
@@ -89,40 +147,31 @@ impl<'a> Parser<'a> {
         Some(ast::Statement::ReturnStatement(ast::AllExpression::Int(5))) // we do not care about statements yet -> 5 is just a placeholder
     }
 
-    fn expect_peek(&mut self, token_type: TokenType) -> bool {
-        match self.peek_token {
-            Some(TokenType::IDENT(_)) => {
-                self.next_token();
-                true
-            }
-            Some(TokenType::ASSIGN) => {
-                self.next_token();
-                true
-            }
-            Some(TokenType::SEMICOLON) => {
-                self.next_token();
-                true
-            }
-            _ => {
-                self.peek_error(token_type);
-                false
-            }
+    //-------------------- Parsing expression functions --------------------//
+
+    fn parse_expression(&mut self, presedence: Presedence) -> Option<ast::AllExpression> {
+        match self.curr_token {
+            Some(TokenType::IDENT(_)) => self.parse_identifier(),
+            Some(TokenType::INT(_)) => self.parse_integer_literal(),
+            _ => None,
         }
     }
 
-    fn peek_error(&mut self, token_type: TokenType) {
-        let msg = format!(
-            "expected next token to be {:?}, got {:?} instead",
-            token_type, self.peek_token
-        );
-
-        self.peek_errors.push(msg); // not sure if i want to actually keep the errors here or just
-                                    // print them and move on
-        println!("peek_errors: {:?}", self.peek_errors);
+    fn parse_identifier(&mut self) -> Option<ast::AllExpression> {
+        match self.curr_token {
+            Some(TokenType::IDENT(ref name)) => Some(ast::AllExpression::Identifier(name.clone())),
+            _ => None,
+        }
     }
 
-    fn curr_token_is(&self, token_type: TokenType) -> bool {
-        self.curr_token == Some(token_type)
+    fn parse_integer_literal(&mut self) -> Option<ast::AllExpression> {
+        match self.curr_token {
+            Some(TokenType::INT(ref value)) => {
+                let value = value.parse::<usize>().unwrap();
+                Some(ast::AllExpression::Int(value))
+            }
+            _ => None,
+        }
     }
 }
 
@@ -193,6 +242,36 @@ mod test {
                 }
                 _ => panic!("not a return statement"),
             }
+        }
+    }
+
+    #[test]
+    fn test_identifier_expression() {
+        let input = "foobar".to_string();
+
+        let mut lexer = Lexer::new(input);
+
+        let mut parser = Parser::new(&mut lexer);
+
+        let program = parser.parse_program();
+
+        assert!(program.is_some());
+
+        let program = program.unwrap();
+
+        assert_eq!(program.statements.len(), 1);
+
+        let statement = program.statements[0].clone();
+
+        match statement {
+            ast::Statement::ExpressionStatement(expression_statement) => match expression_statement
+            {
+                ast::AllExpression::Identifier(name) => {
+                    assert_eq!(name, "foobar".to_string());
+                }
+                _ => panic!("not an identifier expression"),
+            },
+            _ => panic!("not an expression statement"),
         }
     }
 }
