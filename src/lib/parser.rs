@@ -90,7 +90,7 @@ impl<'a> Parser<'a> {
     fn parse_expression_statement(&mut self) -> Option<ast::Statement> {
         let expression = self.parse_expression(Presedence::LOWEST);
 
-        if self.curr_token_is(TokenType::SEMICOLON) {
+        if self.expect_peek(TokenType::SEMICOLON) {
             self.next_token();
         }
 
@@ -153,6 +153,8 @@ impl<'a> Parser<'a> {
         match self.curr_token {
             Some(TokenType::IDENT(_)) => self.parse_identifier(),
             Some(TokenType::INT(_)) => self.parse_integer_literal(),
+            Some(TokenType::BANG) => self.parse_prefix_expression(),
+            Some(TokenType::MINUS) => self.parse_prefix_expression(),
             _ => None,
         }
     }
@@ -172,6 +174,28 @@ impl<'a> Parser<'a> {
             }
             _ => None,
         }
+    }
+
+    fn parse_prefix_expression(&mut self) -> Option<ast::AllExpression> {
+        let operator = match self.curr_token {
+            Some(TokenType::BANG) => TokenType::BANG,
+            Some(TokenType::MINUS) => TokenType::MINUS,
+            _ => return None,
+        };
+
+        self.next_token();
+
+        let right = match self.parse_expression(Presedence::PREFIX) {
+            Some(expression) => expression,
+            _ => return None,
+        };
+
+        let prefix_expression = ast::PrefixExpression {
+            operator,
+            right: Box::new(right),
+        };
+
+        Some(ast::AllExpression::PrefixExpression(prefix_expression))
     }
 }
 
@@ -272,6 +296,70 @@ mod test {
                 _ => panic!("not an identifier expression"),
             },
             _ => panic!("not an expression statement"),
+        }
+    }
+
+    #[test]
+    fn test_integer_literal_expression() {
+        let input = "5;".to_string();
+
+        let mut lexer = Lexer::new(input);
+
+        let mut parser = Parser::new(&mut lexer);
+
+        let program = parser.parse_program();
+
+        assert!(program.is_some());
+
+        let program = program.unwrap();
+
+        assert_eq!(program.statements.len(), 1);
+
+        let statement = program.statements[0].clone();
+
+        match statement {
+            ast::Statement::ExpressionStatement(expression_statement) => match expression_statement
+            {
+                ast::AllExpression::Int(value) => {
+                    assert_eq!(value, 5);
+                }
+                _ => panic!("not an integer literal expression"),
+            },
+            _ => panic!("not an expression statement"),
+        }
+    }
+
+    #[test]
+    fn test_parsing_prefix_expression() {
+        let prefix_tests = vec![("!5;".to_string(), "!", 5), ("-15;".to_string(), "-", 15)];
+
+        for (input, operator, value) in prefix_tests {
+            let mut lexer = Lexer::new(input);
+
+            let mut parser = Parser::new(&mut lexer);
+
+            let program = parser.parse_program();
+
+            assert!(program.is_some());
+
+            let program = program.unwrap();
+
+            assert_eq!(program.statements.len(), 1);
+
+            let statement = program.statements[0].clone();
+
+            match statement {
+                ast::Statement::ExpressionStatement(expression_statement) => {
+                    match expression_statement {
+                        ast::AllExpression::PrefixExpression(prefix_expression) => {
+                            assert_eq!(prefix_expression.operator.to_string(), operator);
+                            assert_eq!(*prefix_expression.right, ast::AllExpression::Int(value));
+                        }
+                        _ => panic!("not a prefix expression"),
+                    }
+                }
+                _ => panic!("not an expression statement"),
+            }
         }
     }
 }

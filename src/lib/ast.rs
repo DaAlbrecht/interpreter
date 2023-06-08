@@ -7,6 +7,37 @@ pub struct Program {
     pub statements: Vec<Statement>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum Statement {
+    LetStatement(LetStatement),
+    ReturnStatement(AllExpression),
+    ExpressionStatement(AllExpression),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AllExpression {
+    Int(usize),
+    Identifier(String),
+    PrefixExpression(PrefixExpression),
+}
+
+//----------------- Statement -----------------//
+#[derive(Debug, Clone, PartialEq)]
+pub struct LetStatement {
+    pub name: String,
+    pub value: AllExpression,
+}
+
+//----------------- Expression -----------------//
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PrefixExpression {
+    pub operator: TokenType,
+    pub right: Box<AllExpression>,
+}
+
+//----------------- Display -----------------//
+
 impl Display for Program {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let mut s = String::new();
@@ -15,13 +46,6 @@ impl Display for Program {
         }
         write!(f, "{}", s)
     }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Statement {
-    LetStatement(LetStatement),
-    ReturnStatement(AllExpression),
-    ExpressionStatement(AllExpression),
 }
 
 impl Display for Statement {
@@ -37,23 +61,15 @@ impl Display for Statement {
         }
     }
 }
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct LetStatement {
-    pub name: String,
-    pub value: AllExpression,
-}
-
 impl Display for LetStatement {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "let {} = {};", self.name, self.value.to_string())
     }
 }
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum AllExpression {
-    Int(usize),
-    Identifier(String),
+impl Display for PrefixExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "({}{})", self.operator, self.right.to_string())
+    }
 }
 
 impl Display for AllExpression {
@@ -61,6 +77,9 @@ impl Display for AllExpression {
         match self {
             AllExpression::Int(int) => write!(f, "{}", int),
             AllExpression::Identifier(identifier) => write!(f, "{}", identifier),
+            AllExpression::PrefixExpression(prefix_expression) => {
+                write!(f, "{}", prefix_expression.to_string())
+            }
         }
     }
 }
