@@ -19,6 +19,7 @@ pub enum AllExpression {
     Int(usize),
     Identifier(String),
     PrefixExpression(PrefixExpression),
+    InfixExpression(InfixExpression),
 }
 
 //----------------- Statement -----------------//
@@ -32,6 +33,13 @@ pub struct LetStatement {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PrefixExpression {
+    pub operator: TokenType,
+    pub right: Box<AllExpression>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct InfixExpression {
+    pub left: Box<AllExpression>,
     pub operator: TokenType,
     pub right: Box<AllExpression>,
 }
@@ -72,6 +80,18 @@ impl Display for PrefixExpression {
     }
 }
 
+impl Display for InfixExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "({} {} {})",
+            self.left.to_string(),
+            self.operator,
+            self.right.to_string()
+        )
+    }
+}
+
 impl Display for AllExpression {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -79,6 +99,9 @@ impl Display for AllExpression {
             AllExpression::Identifier(identifier) => write!(f, "{}", identifier),
             AllExpression::PrefixExpression(prefix_expression) => {
                 write!(f, "{}", prefix_expression.to_string())
+            }
+            AllExpression::InfixExpression(infix_expression) => {
+                write!(f, "{}", infix_expression.to_string())
             }
         }
     }

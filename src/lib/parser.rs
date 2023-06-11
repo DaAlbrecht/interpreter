@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use super::{
     ast::{self, Statement},
     lexer::Lexer,
@@ -11,6 +13,7 @@ struct Parser<'a> {
     peek_errors: Vec<String>,
 }
 
+#[derive(PartialOrd, PartialEq, Debug)]
 enum Presedence {
     LOWEST,
     EQUALS,      // ==
@@ -19,6 +22,21 @@ enum Presedence {
     PRODUCT,     // *
     PREFIX,      // -X or !X
     CALL,        // myFunction(X)
+}
+
+impl Display for Presedence {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Presedence::LOWEST => "LOWEST",
+            Presedence::EQUALS => "EQUALS",
+            Presedence::LESSGREATER => "LESSGREATER",
+            Presedence::SUM => "SUM",
+            Presedence::PRODUCT => "PRODUCT",
+            Presedence::PREFIX => "PREFIX",
+            Presedence::CALL => "CALL",
+        };
+        write!(f, "{}", s)
+    }
 }
 
 impl<'a> Parser<'a> {
@@ -60,7 +78,7 @@ impl<'a> Parser<'a> {
                 true
             }
             _ => {
-                self.peek_error(token_type);
+                //self.peek_error(token_type);
                 false
             }
         }
@@ -90,11 +108,41 @@ impl<'a> Parser<'a> {
     fn parse_expression_statement(&mut self) -> Option<ast::Statement> {
         let expression = self.parse_expression(Presedence::LOWEST);
 
-        if self.expect_peek(TokenType::SEMICOLON) {
+        if self.curr_token_is(TokenType::SEMICOLON) {
             self.next_token();
         }
 
         Some(ast::Statement::ExpressionStatement(expression.unwrap()))
+    }
+
+    fn peek_precedence(&self) -> Presedence {
+        match self.peek_token {
+            Some(TokenType::EQ) => Presedence::EQUALS,
+            Some(TokenType::NOT_EQ) => Presedence::EQUALS,
+            Some(TokenType::LT) => Presedence::LESSGREATER,
+            Some(TokenType::GT) => Presedence::LESSGREATER,
+            Some(TokenType::PLUS) => Presedence::SUM,
+            Some(TokenType::MINUS) => Presedence::SUM,
+            Some(TokenType::SLASH) => Presedence::PRODUCT,
+            Some(TokenType::ASTERISK) => Presedence::PRODUCT,
+            Some(TokenType::LPAREN) => Presedence::CALL,
+            _ => Presedence::LOWEST,
+        }
+    }
+
+    fn curr_precendence(&self) -> Presedence {
+        match self.curr_token {
+            Some(TokenType::EQ) => Presedence::EQUALS,
+            Some(TokenType::NOT_EQ) => Presedence::EQUALS,
+            Some(TokenType::LT) => Presedence::LESSGREATER,
+            Some(TokenType::GT) => Presedence::LESSGREATER,
+            Some(TokenType::PLUS) => Presedence::SUM,
+            Some(TokenType::MINUS) => Presedence::SUM,
+            Some(TokenType::SLASH) => Presedence::PRODUCT,
+            Some(TokenType::ASTERISK) => Presedence::PRODUCT,
+            Some(TokenType::LPAREN) => Presedence::CALL,
+            _ => Presedence::LOWEST,
+        }
     }
 
     fn peek_error(&mut self, token_type: TokenType) {
@@ -150,13 +198,46 @@ impl<'a> Parser<'a> {
     //-------------------- Parsing expression functions --------------------//
 
     fn parse_expression(&mut self, presedence: Presedence) -> Option<ast::AllExpression> {
-        match self.curr_token {
+        println!("presedence: {:?}", presedence);
+
+        println!("curr_token: {:?}", self.curr_token);
+        let prefix = match self.curr_token {
             Some(TokenType::IDENT(_)) => self.parse_identifier(),
             Some(TokenType::INT(_)) => self.parse_integer_literal(),
             Some(TokenType::BANG) => self.parse_prefix_expression(),
             Some(TokenType::MINUS) => self.parse_prefix_expression(),
             _ => None,
+        };
+
+        if prefix.is_none() {
+            return None;
         }
+
+        let mut left_exp = prefix.unwrap();
+
+        while !self.expect_peek(TokenType::SEMICOLON) && presedence < self.peek_precedence() {
+            let infix = match self.peek_token {
+                Some(TokenType::PLUS) => self.parse_infix_expression(left_exp.clone()),
+                Some(TokenType::MINUS) => self.parse_infix_expression(left_exp.clone()),
+                Some(TokenType::SLASH) => self.parse_infix_expression(left_exp.clone()),
+                Some(TokenType::ASTERISK) => self.parse_infix_expression(left_exp.clone()),
+                Some(TokenType::EQ) => self.parse_infix_expression(left_exp.clone()),
+                Some(TokenType::NOT_EQ) => self.parse_infix_expression(left_exp.clone()),
+                Some(TokenType::LT) => self.parse_infix_expression(left_exp.clone()),
+                Some(TokenType::GT) => self.parse_infix_expression(left_exp.clone()),
+                _ => None,
+            };
+
+            self.next_token();
+
+            if infix.is_none() {
+                return Some(left_exp);
+            }
+
+            left_exp = infix.unwrap();
+        }
+
+        Some(left_exp)
     }
 
     fn parse_identifier(&mut self) -> Option<ast::AllExpression> {
@@ -196,6 +277,47 @@ impl<'a> Parser<'a> {
         };
 
         Some(ast::AllExpression::PrefixExpression(prefix_expression))
+    }
+
+    fn parse_infix_expression(&mut self, left: ast::AllExpression) -> Option<ast::AllExpression> {
+        let operator = match self.peek_token {
+            Some(TokenType::PLUS) => TokenType::PLUS,
+            Some(TokenType::MINUS) => TokenType::MINUS,
+            Some(TokenType::SLASH) => TokenType::SLASH,
+            Some(TokenType::ASTERISK) => TokenType::ASTERISK,
+            Some(TokenType::EQ) => TokenType::EQ,
+            Some(TokenType::NOT_EQ) => TokenType::NOT_EQ,
+            Some(TokenType::LT) => TokenType::LT,
+            Some(TokenType::GT) => TokenType::GT,
+            _ => return None,
+        };
+
+        self.next_token();
+
+        let presedence = self.curr_precendence();
+
+        println!("presedence: {:?}", presedence);
+
+        println!("token: {:?}", self.curr_token);
+
+        self.next_token();
+
+        println!("token: {:?}", self.curr_token);
+
+        let right = match self.parse_expression(presedence) {
+            Some(expression) => expression,
+            _ => return None,
+        };
+
+        println!("right: {:?}", right);
+
+        let infix_expression = ast::InfixExpression {
+            operator,
+            left: Box::new(left),
+            right: Box::new(right),
+        };
+
+        Some(ast::AllExpression::InfixExpression(infix_expression))
     }
 }
 
@@ -356,6 +478,53 @@ mod test {
                             assert_eq!(*prefix_expression.right, ast::AllExpression::Int(value));
                         }
                         _ => panic!("not a prefix expression"),
+                    }
+                }
+                _ => panic!("not an expression statement"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_parsing_infix_expression() {
+        let infix_test = vec![
+            ("5 + 5;".to_string(), 5, "+", 5),
+            ("5 - 5;".to_string(), 5, "-", 5),
+            ("5 * 5;".to_string(), 5, "*", 5),
+            ("5 / 5;".to_string(), 5, "/", 5),
+            ("5 > 5;".to_string(), 5, ">", 5),
+            ("5 < 5;".to_string(), 5, "<", 5),
+            ("5 == 5;".to_string(), 5, "==", 5),
+            ("5 != 5;".to_string(), 5, "!=", 5),
+        ];
+
+        for (input, left, operator, right) in infix_test {
+            println!("input: {}", input);
+            println!("{}, {}, {}", left, operator, right);
+
+            let mut lexer = Lexer::new(input);
+
+            let mut parser = Parser::new(&mut lexer);
+
+            let program = parser.parse_program();
+
+            assert!(program.is_some());
+
+            let program = program.unwrap();
+
+            assert_eq!(program.statements.len(), 1);
+
+            let statement = program.statements[0].clone();
+
+            match statement {
+                ast::Statement::ExpressionStatement(expression_statement) => {
+                    match expression_statement {
+                        ast::AllExpression::InfixExpression(infix_expression) => {
+                            assert_eq!(*infix_expression.left, ast::AllExpression::Int(left));
+                            assert_eq!(infix_expression.operator.to_string(), operator);
+                            assert_eq!(*infix_expression.right, ast::AllExpression::Int(right));
+                        }
+                        _ => panic!("not a infix expression"),
                     }
                 }
                 _ => panic!("not an expression statement"),
