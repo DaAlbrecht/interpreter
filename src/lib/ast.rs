@@ -29,7 +29,7 @@ pub struct LetStatement {
     pub value: AllExpression,
 }
 
-//----------------- Expression -----------------//
+//----------------- Expression ----------------//
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PrefixExpression {

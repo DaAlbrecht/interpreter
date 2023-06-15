@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use crate::lib::ast::InfixExpression;
+
 use super::{
     ast::{self, Statement},
     lexer::Lexer,
@@ -60,27 +62,23 @@ impl<'a> Parser<'a> {
     }
 
     fn curr_token_is(&self, token_type: TokenType) -> bool {
-        self.curr_token == Some(token_type)
+        let curr_token = self.curr_token.clone().unwrap();
+
+        std::mem::discriminant(&curr_token) == std::mem::discriminant(&token_type)
+    }
+
+    fn peek_token_is(&self, token_type: TokenType) -> bool {
+        let peek_token = self.peek_token.clone().unwrap();
+        std::mem::discriminant(&peek_token) == std::mem::discriminant(&token_type)
     }
 
     fn expect_peek(&mut self, token_type: TokenType) -> bool {
-        match self.peek_token {
-            Some(TokenType::IDENT(_)) => {
-                self.next_token();
-                true
-            }
-            Some(TokenType::ASSIGN) => {
-                self.next_token();
-                true
-            }
-            Some(TokenType::SEMICOLON) => {
-                self.next_token();
-                true
-            }
-            _ => {
-                //self.peek_error(token_type);
-                false
-            }
+        if self.peek_token_is(token_type) {
+            self.next_token();
+            true
+        } else {
+            //self.peek_error(token_type);
+            false
         }
     }
 
@@ -108,7 +106,7 @@ impl<'a> Parser<'a> {
     fn parse_expression_statement(&mut self) -> Option<ast::Statement> {
         let expression = self.parse_expression(Presedence::LOWEST);
 
-        if self.curr_token_is(TokenType::SEMICOLON) {
+        if self.peek_token_is(TokenType::SEMICOLON) {
             self.next_token();
         }
 
@@ -157,8 +155,9 @@ impl<'a> Parser<'a> {
     }
 
     //-------------------- Parsing statment functions --------------------//
+
     fn parse_let_statement(&mut self) -> Option<ast::Statement> {
-        if !self.expect_peek(TokenType::IDENT("".to_string())) {
+        if !self.expect_peek(TokenType::IDENT(String::from(""))) {
             return None;
         }
 
@@ -170,9 +169,14 @@ impl<'a> Parser<'a> {
         if !self.expect_peek(TokenType::ASSIGN) {
             return None;
         }
-        // TODO: We're skipping the expressions until we  encounter a semicolon for now
 
+        println!("curr_token: {:?}", self.curr_token);
+        println!(
+            "curr_token is semicolon: {:?}",
+            self.curr_token_is(TokenType::SEMICOLON)
+        );
         while !self.curr_token_is(TokenType::SEMICOLON) {
+            println!("skip curr_token: {:?}", self.curr_token);
             self.next_token();
         }
 
@@ -186,21 +190,18 @@ impl<'a> Parser<'a> {
     fn parse_return_statement(&mut self) -> Option<ast::Statement> {
         self.next_token();
 
-        // TODO: We're skipping the expressions until we encounter a semicolon for now
+        let return_statement = self.parse_expression(Presedence::LOWEST);
 
-        while !self.curr_token_is(TokenType::SEMICOLON) {
+        if self.peek_token_is(TokenType::SEMICOLON) {
             self.next_token();
         }
 
-        Some(ast::Statement::ReturnStatement(ast::AllExpression::Int(5))) // we do not care about statements yet -> 5 is just a placeholder
+        Some(ast::Statement::ReturnStatement(return_statement.unwrap()))
     }
 
     //-------------------- Parsing expression functions --------------------//
 
     fn parse_expression(&mut self, presedence: Presedence) -> Option<ast::AllExpression> {
-        println!("presedence: {:?}", presedence);
-
-        println!("curr_token: {:?}", self.curr_token);
         let prefix = match self.curr_token {
             Some(TokenType::IDENT(_)) => self.parse_identifier(),
             Some(TokenType::INT(_)) => self.parse_integer_literal(),
@@ -215,7 +216,19 @@ impl<'a> Parser<'a> {
 
         let mut left_exp = prefix.unwrap();
 
-        while !self.expect_peek(TokenType::SEMICOLON) && presedence < self.peek_precedence() {
+        println!("parse_expression_token: {:?}", self.curr_token);
+        println!("parse_expression_peek: {:?}", self.peek_token);
+        println!("parse_expression_presedence: {:?}", presedence);
+        println!(
+            "parse_expression_peek_presedence: {:?}",
+            self.peek_precedence()
+        );
+
+        println!(
+            "is precence lower: {:?}",
+            presedence < self.peek_precedence()
+        );
+        while !self.peek_token_is(TokenType::SEMICOLON) && presedence < self.peek_precedence() {
             let infix = match self.peek_token {
                 Some(TokenType::PLUS) => self.parse_infix_expression(left_exp.clone()),
                 Some(TokenType::MINUS) => self.parse_infix_expression(left_exp.clone()),
@@ -227,8 +240,6 @@ impl<'a> Parser<'a> {
                 Some(TokenType::GT) => self.parse_infix_expression(left_exp.clone()),
                 _ => None,
             };
-
-            self.next_token();
 
             if infix.is_none() {
                 return Some(left_exp);
@@ -280,7 +291,11 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_infix_expression(&mut self, left: ast::AllExpression) -> Option<ast::AllExpression> {
-        let operator = match self.peek_token {
+        self.next_token();
+
+        println!("infix_curr_token: {:?}", self.curr_token);
+        println!("infix_peek_token: {:?}", self.peek_token);
+        let operator = match self.curr_token {
             Some(TokenType::PLUS) => TokenType::PLUS,
             Some(TokenType::MINUS) => TokenType::MINUS,
             Some(TokenType::SLASH) => TokenType::SLASH,
@@ -289,28 +304,23 @@ impl<'a> Parser<'a> {
             Some(TokenType::NOT_EQ) => TokenType::NOT_EQ,
             Some(TokenType::LT) => TokenType::LT,
             Some(TokenType::GT) => TokenType::GT,
+            Some(TokenType::LPAREN) => TokenType::LPAREN,
             _ => return None,
         };
 
-        self.next_token();
-
         let presedence = self.curr_precendence();
 
-        println!("presedence: {:?}", presedence);
-
-        println!("token: {:?}", self.curr_token);
-
         self.next_token();
 
-        println!("token: {:?}", self.curr_token);
+        println!("left: {:?}", left);
 
         let right = match self.parse_expression(presedence) {
             Some(expression) => expression,
             _ => return None,
         };
 
-        println!("right: {:?}", right);
-
+        println!("after_right_curr_token: {:?}", self.curr_token);
+        println!("after_right_peek_token: {:?}", self.peek_token);
         let infix_expression = ast::InfixExpression {
             operator,
             left: Box::new(left),
@@ -345,6 +355,10 @@ mod test {
         assert!(program.is_some());
 
         let program = program.unwrap();
+
+        for program in program.statements.iter() {
+            println!("{:?}", program);
+        }
 
         assert_eq!(program.statements.len(), 3);
 
@@ -499,23 +513,14 @@ mod test {
         ];
 
         for (input, left, operator, right) in infix_test {
-            println!("input: {}", input);
-            println!("{}, {}, {}", left, operator, right);
-
             let mut lexer = Lexer::new(input);
-
             let mut parser = Parser::new(&mut lexer);
-
             let program = parser.parse_program();
 
             assert!(program.is_some());
-
             let program = program.unwrap();
-
             assert_eq!(program.statements.len(), 1);
-
             let statement = program.statements[0].clone();
-
             match statement {
                 ast::Statement::ExpressionStatement(expression_statement) => {
                     match expression_statement {
@@ -530,5 +535,63 @@ mod test {
                 _ => panic!("not an expression statement"),
             }
         }
+    }
+
+    #[test]
+    fn test_operator_precedence_parsing() {
+        let tests = vec![
+            ("-a * b".to_string(), "((-a) * b)".to_string()),
+            ("!-a".to_string(), "(!(-a))".to_string()),
+            ("a + b + c".to_string(), "((a + b) + c)".to_string()),
+            ("a + b - c".to_string(), "((a + b) - c)".to_string()),
+            ("a * b * c".to_string(), "((a * b) * c)".to_string()),
+            ("a * b / c".to_string(), "((a * b) / c)".to_string()),
+            ("a + b / c".to_string(), "(a + (b / c))".to_string()),
+            (
+                "a + b * c + d / e - f".to_string(),
+                "(((a + (b * c)) + (d / e)) - f)".to_string(),
+            ),
+            ("3 + 4; -5 * 5".to_string(), "(3 + 4)((-5) * 5)".to_string()),
+            (
+                "5 > 4 == 3 < 4".to_string(),
+                "((5 > 4) == (3 < 4))".to_string(),
+            ),
+            (
+                "5 < 4 != 3 > 4".to_string(),
+                "((5 < 4) != (3 > 4))".to_string(),
+            ),
+            (
+                "3 + 4 * 5 == 3 * 1 + 4 * 5".to_string(),
+                "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))".to_string(),
+            ),
+        ];
+
+        for (input, expected) in tests {
+            let mut lexer = Lexer::new(input);
+
+            let mut parser = Parser::new(&mut lexer);
+
+            let program = parser.parse_program();
+
+            assert!(program.is_some());
+
+            let program = program.unwrap();
+
+            println!("program: {}", program.to_string());
+            println!("expected: {}", expected);
+            assert_eq!(program.to_string(), expected);
+        }
+    }
+
+    #[test]
+    fn text_example_prat_parser() {
+        let input = "1 + 2 + 3".to_string();
+        let mut lexer = Lexer::new(input);
+        let mut parser = Parser::new(&mut lexer);
+        let program = parser.parse_program();
+
+        let program = program.unwrap();
+
+        assert_eq!(program.to_string(), "((1 + 2) + 3)");
     }
 }
