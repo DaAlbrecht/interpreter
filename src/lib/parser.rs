@@ -170,13 +170,7 @@ impl<'a> Parser<'a> {
             return None;
         }
 
-        println!("curr_token: {:?}", self.curr_token);
-        println!(
-            "curr_token is semicolon: {:?}",
-            self.curr_token_is(TokenType::SEMICOLON)
-        );
         while !self.curr_token_is(TokenType::SEMICOLON) {
-            println!("skip curr_token: {:?}", self.curr_token);
             self.next_token();
         }
 
@@ -216,18 +210,6 @@ impl<'a> Parser<'a> {
 
         let mut left_exp = prefix.unwrap();
 
-        println!("parse_expression_token: {:?}", self.curr_token);
-        println!("parse_expression_peek: {:?}", self.peek_token);
-        println!("parse_expression_presedence: {:?}", presedence);
-        println!(
-            "parse_expression_peek_presedence: {:?}",
-            self.peek_precedence()
-        );
-
-        println!(
-            "is precence lower: {:?}",
-            presedence < self.peek_precedence()
-        );
         while !self.peek_token_is(TokenType::SEMICOLON) && presedence < self.peek_precedence() {
             let infix = match self.peek_token {
                 Some(TokenType::PLUS) => self.parse_infix_expression(left_exp.clone()),
@@ -293,8 +275,6 @@ impl<'a> Parser<'a> {
     fn parse_infix_expression(&mut self, left: ast::AllExpression) -> Option<ast::AllExpression> {
         self.next_token();
 
-        println!("infix_curr_token: {:?}", self.curr_token);
-        println!("infix_peek_token: {:?}", self.peek_token);
         let operator = match self.curr_token {
             Some(TokenType::PLUS) => TokenType::PLUS,
             Some(TokenType::MINUS) => TokenType::MINUS,
@@ -312,15 +292,11 @@ impl<'a> Parser<'a> {
 
         self.next_token();
 
-        println!("left: {:?}", left);
-
         let right = match self.parse_expression(presedence) {
             Some(expression) => expression,
             _ => return None,
         };
 
-        println!("after_right_curr_token: {:?}", self.curr_token);
-        println!("after_right_peek_token: {:?}", self.peek_token);
         let infix_expression = ast::InfixExpression {
             operator,
             left: Box::new(left),
@@ -577,8 +553,6 @@ mod test {
 
             let program = program.unwrap();
 
-            println!("program: {}", program.to_string());
-            println!("expected: {}", expected);
             assert_eq!(program.to_string(), expected);
         }
     }
