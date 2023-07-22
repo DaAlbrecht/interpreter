@@ -20,6 +20,15 @@ pub enum AllExpression {
     Identifier(String),
     PrefixExpression(PrefixExpression),
     InfixExpression(InfixExpression),
+    Boolean(bool),
+    IfExpression(IfExpression),
+    FunctionLiteral(FunctionLiteral),
+    CallExpression(CallExpression),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct BlockStatement {
+    pub statements: Vec<Statement>,
 }
 
 //----------------- Statement -----------------//
@@ -42,6 +51,25 @@ pub struct InfixExpression {
     pub left: Box<AllExpression>,
     pub operator: TokenType,
     pub right: Box<AllExpression>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct IfExpression {
+    pub condition: Box<AllExpression>,
+    pub consequence: BlockStatement,
+    pub alternative: Option<BlockStatement>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FunctionLiteral {
+    pub parameters: Option<Vec<String>>,
+    pub body: BlockStatement,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CallExpression {
+    pub function: Box<AllExpression>,
+    pub arguments: Option<Vec<AllExpression>>,
 }
 
 //----------------- Display -----------------//
@@ -92,6 +120,69 @@ impl Display for InfixExpression {
     }
 }
 
+impl Display for IfExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let mut s = String::new();
+        s.push_str("if");
+        s.push_str(&self.condition.to_string());
+        s.push_str(" ");
+        s.push_str(&self.consequence.to_string());
+        if let Some(alternative) = &self.alternative {
+            s.push_str("else ");
+            s.push_str(&alternative.to_string());
+        }
+        write!(f, "{}", s)
+    }
+}
+
+impl Display for BlockStatement {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let mut s = String::new();
+        for statement in &self.statements {
+            s.push_str(&statement.to_string());
+        }
+        write!(f, "{}", s)
+    }
+}
+
+impl Display for FunctionLiteral {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let mut s = String::new();
+        s.push_str("fn");
+        if let Some(parameters) = &self.parameters {
+            s.push_str("(");
+            for (i, parameter) in parameters.iter().enumerate() {
+                s.push_str(parameter);
+                if i != parameters.len() - 1 {
+                    s.push_str(", ");
+                }
+            }
+            s.push_str(")");
+        }
+        s.push_str(" ");
+        s.push_str(&self.body.to_string());
+        write!(f, "{}", s)
+    }
+}
+
+impl Display for CallExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let mut s = String::new();
+        s.push_str(&self.function.to_string());
+        s.push_str("(");
+        if let Some(arguments) = &self.arguments {
+            for (i, argument) in arguments.iter().enumerate() {
+                s.push_str(&argument.to_string());
+                if i != arguments.len() - 1 {
+                    s.push_str(", ");
+                }
+            }
+        }
+        s.push_str(")");
+        write!(f, "{}", s)
+    }
+}
+
 impl Display for AllExpression {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -102,6 +193,16 @@ impl Display for AllExpression {
             }
             AllExpression::InfixExpression(infix_expression) => {
                 write!(f, "{}", infix_expression.to_string())
+            }
+            AllExpression::Boolean(boolean) => write!(f, "{}", boolean),
+            AllExpression::IfExpression(if_expression) => {
+                write!(f, "{}", if_expression.to_string())
+            }
+            AllExpression::FunctionLiteral(function_literal) => {
+                write!(f, "{}", function_literal.to_string())
+            }
+            AllExpression::CallExpression(call_expression) => {
+                write!(f, "{}", call_expression.to_string())
             }
         }
     }

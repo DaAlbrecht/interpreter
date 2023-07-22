@@ -1,7 +1,5 @@
 use std::fmt::Display;
 
-use crate::lib::ast::InfixExpression;
-
 use super::{
     ast::{self, Statement},
     lexer::Lexer,
@@ -82,20 +80,18 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_program(&mut self) -> Option<ast::Program> {
+    pub fn parse_program(&mut self) -> Result<ast::Program, String> {
         let mut program = ast::Program { statements: vec![] };
 
         while self.curr_token != Some(TokenType::EOF) {
-            let statement = self.parse_statement();
-            if statement.is_some() {
-                program.statements.push(statement.unwrap());
-            }
+            let statement = self.parse_statement()?;
+            program.statements.push(statement);
             self.next_token();
         }
-        Some(program)
+        Ok(program)
     }
 
-    fn parse_statement(&mut self) -> Option<ast::Statement> {
+    fn parse_statement(&mut self) -> Result<ast::Statement, String> {
         match self.curr_token {
             Some(TokenType::LET) => self.parse_let_statement(),
             Some(TokenType::RETURN) => self.parse_return_statement(),
@@ -103,14 +99,14 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_expression_statement(&mut self) -> Option<ast::Statement> {
+    fn parse_expression_statement(&mut self) -> Result<ast::Statement, String> {
         let expression = self.parse_expression(Presedence::LOWEST);
 
         if self.peek_token_is(TokenType::SEMICOLON) {
             self.next_token();
         }
 
-        Some(ast::Statement::ExpressionStatement(expression.unwrap()))
+        Ok(Statement::ExpressionStatement(expression.unwrap()))
     }
 
     fn peek_precedence(&self) -> Presedence {
@@ -156,32 +152,36 @@ impl<'a> Parser<'a> {
 
     //-------------------- Parsing statment functions --------------------//
 
-    fn parse_let_statement(&mut self) -> Option<ast::Statement> {
+    fn parse_let_statement(&mut self) -> Result<ast::Statement, String> {
         if !self.expect_peek(TokenType::IDENT(String::from(""))) {
-            return None;
+            return Err(String::from("no identifier found after let statement"));
         }
 
         let name = match self.curr_token {
             Some(TokenType::IDENT(ref name)) => name.clone(),
-            _ => return None,
+            _ => return Err(String::from("no identifier found after let statement")),
         };
 
         if !self.expect_peek(TokenType::ASSIGN) {
-            return None;
+            return Err(String::from(
+                "no assign found after let statement identifier",
+            ));
         }
 
-        while !self.curr_token_is(TokenType::SEMICOLON) {
+        self.next_token();
+
+        let value = self.parse_expression(Presedence::LOWEST)?;
+
+        if self.peek_token_is(TokenType::SEMICOLON) {
             self.next_token();
         }
 
-        let let_statement = ast::LetStatement {
-            name,
-            value: ast::AllExpression::Int(5), // we do not care about statements yet
-        };
+        let let_statement = ast::LetStatement { name, value };
 
-        Some(ast::Statement::LetStatement(let_statement))
+        Ok(ast::Statement::LetStatement(let_statement))
     }
-    fn parse_return_statement(&mut self) -> Option<ast::Statement> {
+
+    fn parse_return_statement(&mut self) -> Result<ast::Statement, String> {
         self.next_token();
 
         let return_statement = self.parse_expression(Presedence::LOWEST);
@@ -190,25 +190,26 @@ impl<'a> Parser<'a> {
             self.next_token();
         }
 
-        Some(ast::Statement::ReturnStatement(return_statement.unwrap()))
+        Ok(ast::Statement::ReturnStatement(return_statement?))
     }
 
     //-------------------- Parsing expression functions --------------------//
 
-    fn parse_expression(&mut self, presedence: Presedence) -> Option<ast::AllExpression> {
+    fn parse_expression(&mut self, presedence: Presedence) -> Result<ast::AllExpression, String> {
         let prefix = match self.curr_token {
             Some(TokenType::IDENT(_)) => self.parse_identifier(),
             Some(TokenType::INT(_)) => self.parse_integer_literal(),
             Some(TokenType::BANG) => self.parse_prefix_expression(),
             Some(TokenType::MINUS) => self.parse_prefix_expression(),
-            _ => None,
+            Some(TokenType::TRUE) => self.parse_boolean(),
+            Some(TokenType::FALSE) => self.parse_boolean(),
+            Some(TokenType::LPAREN) => self.parse_grouped_expression(),
+            Some(TokenType::IF) => self.parse_if_expression(),
+            Some(TokenType::FUNCTION) => self.parse_function_literal(),
+            _ => return Err(String::from("no prefix found")),
         };
 
-        if prefix.is_none() {
-            return None;
-        }
-
-        let mut left_exp = prefix.unwrap();
+        let mut left_exp = prefix?;
 
         while !self.peek_token_is(TokenType::SEMICOLON) && presedence < self.peek_precedence() {
             let infix = match self.peek_token {
@@ -220,48 +221,53 @@ impl<'a> Parser<'a> {
                 Some(TokenType::NOT_EQ) => self.parse_infix_expression(left_exp.clone()),
                 Some(TokenType::LT) => self.parse_infix_expression(left_exp.clone()),
                 Some(TokenType::GT) => self.parse_infix_expression(left_exp.clone()),
-                _ => None,
+                Some(TokenType::LPAREN) => self.parse_call_expression(left_exp.clone()),
+                _ => Err(String::from("no infix found")),
             };
 
-            if infix.is_none() {
-                return Some(left_exp);
-            }
-
-            left_exp = infix.unwrap();
+            left_exp = infix?;
         }
 
-        Some(left_exp)
+        Ok(left_exp)
     }
 
-    fn parse_identifier(&mut self) -> Option<ast::AllExpression> {
+    fn parse_identifier(&mut self) -> Result<ast::AllExpression, String> {
         match self.curr_token {
-            Some(TokenType::IDENT(ref name)) => Some(ast::AllExpression::Identifier(name.clone())),
-            _ => None,
+            Some(TokenType::IDENT(ref name)) => Ok(ast::AllExpression::Identifier(name.clone())),
+            _ => Err(String::from("no identifier found")),
         }
     }
 
-    fn parse_integer_literal(&mut self) -> Option<ast::AllExpression> {
+    fn parse_integer_literal(&mut self) -> Result<ast::AllExpression, String> {
         match self.curr_token {
             Some(TokenType::INT(ref value)) => {
                 let value = value.parse::<usize>().unwrap();
-                Some(ast::AllExpression::Int(value))
+                Ok(ast::AllExpression::Int(value))
             }
-            _ => None,
+            _ => Err(String::from("no integer found")),
         }
     }
 
-    fn parse_prefix_expression(&mut self) -> Option<ast::AllExpression> {
+    fn parse_boolean(&mut self) -> Result<ast::AllExpression, String> {
+        match self.curr_token {
+            Some(TokenType::TRUE) => Ok(ast::AllExpression::Boolean(true)),
+            Some(TokenType::FALSE) => Ok(ast::AllExpression::Boolean(false)),
+            _ => Err(String::from("no boolean found")),
+        }
+    }
+
+    fn parse_prefix_expression(&mut self) -> Result<ast::AllExpression, String> {
         let operator = match self.curr_token {
             Some(TokenType::BANG) => TokenType::BANG,
             Some(TokenType::MINUS) => TokenType::MINUS,
-            _ => return None,
+            _ => return Err(String::from("no prefix operator found")),
         };
 
         self.next_token();
 
         let right = match self.parse_expression(Presedence::PREFIX) {
-            Some(expression) => expression,
-            _ => return None,
+            Ok(expression) => expression,
+            _ => return Err(String::from("no prefix expression found")),
         };
 
         let prefix_expression = ast::PrefixExpression {
@@ -269,10 +275,13 @@ impl<'a> Parser<'a> {
             right: Box::new(right),
         };
 
-        Some(ast::AllExpression::PrefixExpression(prefix_expression))
+        Ok(ast::AllExpression::PrefixExpression(prefix_expression))
     }
 
-    fn parse_infix_expression(&mut self, left: ast::AllExpression) -> Option<ast::AllExpression> {
+    fn parse_infix_expression(
+        &mut self,
+        left: ast::AllExpression,
+    ) -> Result<ast::AllExpression, String> {
         self.next_token();
 
         let operator = match self.curr_token {
@@ -285,17 +294,14 @@ impl<'a> Parser<'a> {
             Some(TokenType::LT) => TokenType::LT,
             Some(TokenType::GT) => TokenType::GT,
             Some(TokenType::LPAREN) => TokenType::LPAREN,
-            _ => return None,
+            _ => return Err(String::from("no operator found")),
         };
 
         let presedence = self.curr_precendence();
 
         self.next_token();
 
-        let right = match self.parse_expression(presedence) {
-            Some(expression) => expression,
-            _ => return None,
-        };
+        let right = self.parse_expression(presedence)?;
 
         let infix_expression = ast::InfixExpression {
             operator,
@@ -303,48 +309,210 @@ impl<'a> Parser<'a> {
             right: Box::new(right),
         };
 
-        Some(ast::AllExpression::InfixExpression(infix_expression))
+        Ok(ast::AllExpression::InfixExpression(infix_expression))
+    }
+
+    fn parse_grouped_expression(&mut self) -> Result<ast::AllExpression, String> {
+        self.next_token();
+
+        let expression = self.parse_expression(Presedence::LOWEST);
+
+        if !self.expect_peek(TokenType::RPAREN) {
+            return Err(String::from("no right paren found"));
+        }
+
+        expression
+    }
+
+    fn parse_if_expression(&mut self) -> Result<ast::AllExpression, String> {
+        if !self.expect_peek(TokenType::LPAREN) {
+            return Err(String::from("no left paren found"));
+        }
+
+        self.next_token();
+
+        let condition = self.parse_expression(Presedence::LOWEST);
+
+        if !self.expect_peek(TokenType::RPAREN) {
+            return Err(String::from("no right paren found"));
+        }
+
+        if !self.expect_peek(TokenType::LBRACE) {
+            return Err(String::from("no left brace found"));
+        }
+
+        let consequence = self.parse_block_statement();
+
+        match self.peek_token {
+            Some(TokenType::ELSE) => {
+                self.next_token();
+
+                if !self.expect_peek(TokenType::LBRACE) {
+                    return Err(String::from("no left brace found"));
+                }
+
+                let alternative = self.parse_block_statement();
+
+                Ok(ast::AllExpression::IfExpression(ast::IfExpression {
+                    condition: Box::new(condition?),
+                    consequence: consequence?,
+                    alternative: Some(alternative?),
+                }))
+            }
+            _ => Ok(ast::AllExpression::IfExpression(ast::IfExpression {
+                condition: Box::new(condition?),
+                consequence: consequence?,
+                alternative: None,
+            })),
+        }
+    }
+
+    fn parse_block_statement(&mut self) -> Result<ast::BlockStatement, String> {
+        let mut statements: Vec<ast::Statement> = vec![];
+
+        self.next_token();
+
+        while !self.curr_token_is(TokenType::RBRACE) && !self.curr_token_is(TokenType::EOF) {
+            let statement = self.parse_statement();
+
+            if let Ok(statement) = statement {
+                statements.push(statement);
+            }
+
+            self.next_token();
+        }
+
+        Ok(ast::BlockStatement { statements })
+    }
+
+    fn parse_function_literal(&mut self) -> Result<ast::AllExpression, String> {
+        if !self.expect_peek(TokenType::LPAREN) {
+            return Err(String::from("no left paren found"));
+        }
+
+        let params = self.parse_function_parameters()?;
+
+        if !self.expect_peek(TokenType::LBRACE) {
+            return Err(String::from("no left brace found"));
+        }
+
+        let body = self.parse_block_statement()?;
+
+        Ok(ast::AllExpression::FunctionLiteral(ast::FunctionLiteral {
+            parameters: params,
+            body,
+        }))
+    }
+
+    fn parse_function_parameters(&mut self) -> Result<Option<Vec<String>>, String> {
+        let mut identifiers: Vec<String> = vec![];
+
+        if self.peek_token_is(TokenType::RPAREN) {
+            self.next_token();
+            return Ok(None);
+        }
+
+        self.next_token();
+
+        match self.curr_token {
+            Some(TokenType::IDENT(ref identifier)) => identifiers.push(identifier.clone()),
+            _ => return Err(String::from("no identifier found")),
+        }
+
+        while self.peek_token_is(TokenType::COMMA) {
+            self.next_token();
+            self.next_token();
+
+            match self.curr_token {
+                Some(TokenType::IDENT(ref identifier)) => identifiers.push(identifier.clone()),
+                _ => return Err(String::from("no identifier found")),
+            }
+        }
+
+        if !self.expect_peek(TokenType::RPAREN) {
+            return Err(String::from("no right paren found"));
+        }
+
+        Ok(Some(identifiers))
+    }
+
+    fn parse_call_expression(
+        &mut self,
+        function: ast::AllExpression,
+    ) -> Result<ast::AllExpression, String> {
+        let arguments = self.parse_call_arguments()?;
+        Ok(ast::AllExpression::CallExpression(ast::CallExpression {
+            function: Box::new(function),
+            arguments,
+        }))
+    }
+
+    fn parse_call_arguments(&mut self) -> Result<Option<Vec<ast::AllExpression>>, String> {
+        let mut arguments: Vec<ast::AllExpression> = vec![];
+        self.next_token();
+
+        if self.peek_token_is(TokenType::RPAREN) {
+            self.next_token();
+            return Ok(None);
+        }
+
+        self.next_token();
+
+        arguments.push(self.parse_expression(Presedence::LOWEST).unwrap());
+
+        while self.peek_token_is(TokenType::COMMA) {
+            self.next_token();
+            self.next_token();
+
+            arguments.push(self.parse_expression(Presedence::LOWEST).unwrap());
+        }
+
+        if !self.expect_peek(TokenType::RPAREN) {
+            return Err(String::from("no right paren found"));
+        }
+
+        Ok(Some(arguments))
     }
 }
 
 #[cfg(test)]
 mod test {
     use crate::lib::lexer::Lexer;
+    use crate::lib::tokens::TokenType;
 
     use super::ast;
     use super::Parser;
 
     #[test]
     fn test_let_statements() {
-        let input = r#"
-         let x = 5;
-        let y = 10;
-        let foobar =  838383;
-        "#
-        .to_string();
+        let tests = vec![
+            ("let x = 5;", "x", ast::AllExpression::Int(5)),
+            ("let y = true;", "y", ast::AllExpression::Boolean(true)),
+            (
+                "let foobar = y;",
+                "foobar",
+                ast::AllExpression::Identifier("y".to_string()),
+            ),
+        ];
 
-        let mut lexer = Lexer::new(input);
-        let mut parser = Parser::new(&mut lexer);
+        for (input, expected_identifier, expected_value) in tests {
+            let mut lexer = Lexer::new(input.to_string());
+            let mut parser = Parser::new(&mut lexer);
 
-        let program = parser.parse_program();
+            let program = parser.parse_program();
 
-        assert!(program.is_some());
+            assert!(program.is_ok());
 
-        let program = program.unwrap();
+            let program = program.unwrap();
 
-        for program in program.statements.iter() {
-            println!("{:?}", program);
-        }
+            assert_eq!(program.statements.len(), 1);
 
-        assert_eq!(program.statements.len(), 3);
+            let statement = &program.statements[0];
 
-        let tests = vec!["x".to_string(), "y".to_string(), "foobar".to_string()];
-
-        for (i, test) in tests.iter().enumerate() {
-            let statement = program.statements[i].clone();
             match statement {
                 ast::Statement::LetStatement(let_statement) => {
-                    assert_eq!(let_statement.name, test.to_string());
+                    assert_eq!(let_statement.name, expected_identifier);
+                    assert_eq!(let_statement.value, expected_value);
                 }
                 _ => panic!("not a let statement"),
             }
@@ -353,28 +521,32 @@ mod test {
 
     #[test]
     fn test_return_statements() {
-        let input = r#"
-         return 5;
-        return 10;
-        return 993322;
-        "#
-        .to_string();
+        let tests = vec![
+            ("return 5;", ast::AllExpression::Int(5)),
+            ("return true;", ast::AllExpression::Boolean(true)),
+            (
+                "return foobar;",
+                ast::AllExpression::Identifier("foobar".to_string()),
+            ),
+        ];
 
-        let mut lexer = Lexer::new(input);
-        let mut parser = Parser::new(&mut lexer);
+        for (input, expected_value) in tests {
+            let mut lexer = Lexer::new(input.to_string());
+            let mut parser = Parser::new(&mut lexer);
 
-        let program = parser.parse_program();
+            let program = parser.parse_program();
 
-        assert!(program.is_some());
+            assert!(program.is_ok());
 
-        let program = program.unwrap();
+            let program = program.unwrap();
 
-        assert_eq!(program.statements.len(), 3);
+            assert_eq!(program.statements.len(), 1);
 
-        for statement in program.statements {
+            let statement = program.statements[0].clone();
+
             match statement {
-                ast::Statement::ReturnStatement(_) => {
-                    assert!(true);
+                ast::Statement::ReturnStatement(return_statement) => {
+                    assert_eq!(return_statement, expected_value);
                 }
                 _ => panic!("not a return statement"),
             }
@@ -391,7 +563,7 @@ mod test {
 
         let program = parser.parse_program();
 
-        assert!(program.is_some());
+        assert!(program.is_ok());
 
         let program = program.unwrap();
 
@@ -421,7 +593,7 @@ mod test {
 
         let program = parser.parse_program();
 
-        assert!(program.is_some());
+        assert!(program.is_ok());
 
         let program = program.unwrap();
 
@@ -452,7 +624,7 @@ mod test {
 
             let program = parser.parse_program();
 
-            assert!(program.is_some());
+            assert!(program.is_ok());
 
             let program = program.unwrap();
 
@@ -493,7 +665,7 @@ mod test {
             let mut parser = Parser::new(&mut lexer);
             let program = parser.parse_program();
 
-            assert!(program.is_some());
+            assert!(program.is_ok());
             let program = program.unwrap();
             assert_eq!(program.statements.len(), 1);
             let statement = program.statements[0].clone();
@@ -540,6 +712,29 @@ mod test {
                 "3 + 4 * 5 == 3 * 1 + 4 * 5".to_string(),
                 "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))".to_string(),
             ),
+            (
+                "1 + (2 + 3) + 4".to_string(),
+                "((1 + (2 + 3)) + 4)".to_string(),
+            ),
+            ("(5 + 5) * 2".to_string(), "((5 + 5) * 2)".to_string()),
+            ("2 / (5 + 5)".to_string(), "(2 / (5 + 5))".to_string()),
+            ("-(5 + 5)".to_string(), "(-(5 + 5))".to_string()),
+            (
+                "!(true == true)".to_string(),
+                "(!(true == true))".to_string(),
+            ),
+            (
+                "a + add(b * c) + d".to_string(),
+                "((a + add((b * c))) + d)".to_string(),
+            ),
+            (
+                "add(a, b, 1, 2 * 3, 4 + 5, add(6, 7 * 8))".to_string(),
+                "add(a, b, 1, (2 * 3), (4 + 5), add(6, (7 * 8)))".to_string(),
+            ),
+            (
+                "add(a + b + c * d / f + g)".to_string(),
+                "add((((a + b) + ((c * d) / f)) + g))".to_string(),
+            ),
         ];
 
         for (input, expected) in tests {
@@ -549,7 +744,7 @@ mod test {
 
             let program = parser.parse_program();
 
-            assert!(program.is_some());
+            assert!(program.is_ok());
 
             let program = program.unwrap();
 
@@ -567,5 +762,243 @@ mod test {
         let program = program.unwrap();
 
         assert_eq!(program.to_string(), "((1 + 2) + 3)");
+    }
+
+    #[test]
+    fn test_boolean_expression() {
+        let tests = vec![("true".to_string(), true), ("false".to_string(), false)];
+
+        for (input, value) in tests {
+            let mut lexer = Lexer::new(input);
+            let mut parser = Parser::new(&mut lexer);
+            let program = parser.parse_program();
+
+            assert!(program.is_ok());
+            let program = program.unwrap();
+            assert_eq!(program.statements.len(), 1);
+            let statement = program.statements[0].clone();
+            match statement {
+                ast::Statement::ExpressionStatement(expression_statement) => {
+                    match expression_statement {
+                        ast::AllExpression::Boolean(boolean) => {
+                            assert_eq!(boolean, value);
+                        }
+                        _ => panic!("not a boolean expression"),
+                    }
+                }
+                _ => panic!("not an expression statement"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_if_expression() {
+        let input = "if (x < y) { x }".to_string();
+        let mut lexer = Lexer::new(input);
+        let mut parser = Parser::new(&mut lexer);
+        let program = parser.parse_program();
+
+        assert!(program.is_ok());
+
+        let program = program.unwrap();
+
+        assert_eq!(program.statements.len(), 1);
+
+        let statement = program.statements[0].clone();
+
+        match statement {
+            ast::Statement::ExpressionStatement(expression_statement) => match expression_statement
+            {
+                ast::AllExpression::IfExpression(if_expression) => {
+                    assert_eq!(if_expression.condition.to_string(), "(x < y)".to_string());
+                    assert_eq!(if_expression.consequence.statements.len(), 1);
+                    let consequence = if_expression.consequence.statements[0].clone();
+                    match consequence {
+                        ast::Statement::ExpressionStatement(expression_statement) => {
+                            match expression_statement {
+                                ast::AllExpression::Identifier(identifier) => {
+                                    assert_eq!(identifier, "x".to_string());
+                                }
+                                _ => panic!("not an identifier"),
+                            }
+                        }
+                        _ => panic!("not an expression statement"),
+                    }
+                    assert!(if_expression.alternative.is_none());
+                }
+                _ => panic!("not an if expression"),
+            },
+            _ => panic!("not an expression statement"),
+        }
+    }
+
+    #[test]
+    fn test_if_else_expression() {
+        let input = "if (x < y) { x } else { y }".to_string();
+        let mut lexer = Lexer::new(input);
+        let mut parser = Parser::new(&mut lexer);
+        let program = parser.parse_program();
+
+        assert!(program.is_ok());
+
+        let program = program.unwrap();
+
+        assert_eq!(program.statements.len(), 1);
+
+        let statement = program.statements[0].clone();
+
+        match statement {
+            ast::Statement::ExpressionStatement(expression_statement) => match expression_statement
+            {
+                ast::AllExpression::IfExpression(if_expression) => {
+                    assert_eq!(if_expression.condition.to_string(), "(x < y)".to_string());
+                    assert_eq!(if_expression.consequence.statements.len(), 1);
+                    let consequence = if_expression.consequence.statements[0].clone();
+                    match consequence {
+                        ast::Statement::ExpressionStatement(expression_statement) => {
+                            match expression_statement {
+                                ast::AllExpression::Identifier(identifier) => {
+                                    assert_eq!(identifier, "x".to_string());
+                                }
+                                _ => panic!("not an identifier"),
+                            }
+                        }
+                        _ => panic!("not an expression statement"),
+                    }
+                    assert!(if_expression.alternative.is_some());
+                    let alternative = if_expression.alternative.unwrap();
+                    assert_eq!(alternative.statements.len(), 1);
+                    let alternative_statement = alternative.statements[0].clone();
+                    match alternative_statement {
+                        ast::Statement::ExpressionStatement(expression_statement) => {
+                            match expression_statement {
+                                ast::AllExpression::Identifier(identifier) => {
+                                    assert_eq!(identifier, "y".to_string());
+                                }
+                                _ => panic!("not an identifier"),
+                            }
+                        }
+                        _ => panic!("not an expression statement"),
+                    }
+                }
+                _ => panic!("not an if expression"),
+            },
+            _ => panic!("not an expression statement"),
+        }
+    }
+
+    #[test]
+    fn test_function_literal() {
+        let input = "fn(x, y) { x + y; }".to_string();
+        let mut lexer = Lexer::new(input);
+        let mut parser = Parser::new(&mut lexer);
+        let program = parser.parse_program();
+
+        assert!(program.is_ok());
+
+        let program = program.unwrap();
+
+        assert_eq!(program.statements.len(), 1);
+
+        let statement = program.statements[0].clone();
+
+        match statement {
+            ast::Statement::ExpressionStatement(expression_statement) => match expression_statement
+            {
+                ast::AllExpression::FunctionLiteral(function_literal) => {
+                    let parameters = function_literal.parameters.unwrap();
+                    assert_eq!(parameters.len(), 2);
+                    assert_eq!(parameters[0].to_string(), "x".to_string());
+                    assert_eq!(parameters[1].to_string(), "y".to_string());
+                    assert_eq!(function_literal.body.statements.len(), 1);
+                    let body_statement = function_literal.body.statements[0].clone();
+                    match body_statement {
+                        ast::Statement::ExpressionStatement(expression_statement) => {
+                            match expression_statement {
+                                ast::AllExpression::InfixExpression(infix_expression) => {
+                                    assert_eq!(infix_expression.operator, TokenType::PLUS);
+                                    assert_eq!(infix_expression.left.to_string(), "x".to_string());
+                                    assert_eq!(infix_expression.right.to_string(), "y".to_string());
+                                }
+                                _ => panic!("not an infix expression"),
+                            }
+                        }
+                        _ => panic!("not an expression statement"),
+                    }
+                }
+                _ => panic!("not a function literal"),
+            },
+            _ => panic!("not an expression statement"),
+        }
+    }
+
+    #[test]
+    fn test_function_parameter_parsing() {
+        let tests: Vec<(String, Option<Vec<String>>)> = vec![
+            ("fn() {}".to_string(), None),
+            ("fn(x) {}".to_string(), Some(vec!["x".to_string()])),
+            (
+                "fn(x, y, z) {}".to_string(),
+                Some(vec!["x".to_string(), "y".to_string(), "z".to_string()]),
+            ),
+        ];
+
+        for (input, expected_params) in tests {
+            let mut lexer = Lexer::new(input.to_string());
+            let mut parser = Parser::new(&mut lexer);
+            let program = parser.parse_program();
+
+            assert!(program.is_ok());
+
+            let program = program.unwrap();
+
+            assert_eq!(program.statements.len(), 1);
+
+            let statement = program.statements[0].clone();
+
+            match statement {
+                ast::Statement::ExpressionStatement(expression_statement) => {
+                    match expression_statement {
+                        ast::AllExpression::FunctionLiteral(function_literal) => {
+                            assert_eq!(function_literal.parameters, expected_params);
+                        }
+                        _ => panic!("not a function literal"),
+                    }
+                }
+                _ => panic!("not an expression statement"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_call_expression() {
+        let input = "add(1, 2 * 3, 4 + 5);".to_string();
+        let mut lexer = Lexer::new(input.to_string());
+        let mut parser = Parser::new(&mut lexer);
+        let program = parser.parse_program();
+
+        assert!(program.is_ok());
+
+        let program = program.unwrap();
+
+        assert_eq!(program.statements.len(), 1);
+
+        let statement = program.statements[0].clone();
+
+        match statement {
+            ast::Statement::ExpressionStatement(expression_statement) => match expression_statement
+            {
+                ast::AllExpression::CallExpression(call_expression) => {
+                    let arguments = call_expression.arguments.unwrap();
+                    assert_eq!(call_expression.function.to_string(), "add".to_string());
+                    assert_eq!(arguments.len(), 3);
+                    assert_eq!(arguments[0].to_string(), "1".to_string());
+                    assert_eq!(arguments[1].to_string(), "(2 * 3)".to_string());
+                    assert_eq!(arguments[2].to_string(), "(4 + 5)".to_string());
+                }
+                _ => panic!("not a call expression"),
+            },
+            _ => panic!("not an expression statement"),
+        }
     }
 }
