@@ -6,11 +6,10 @@ use super::{
     tokens::TokenType,
 };
 
-struct Parser<'a> {
+pub struct Parser<'a> {
     lexer: &'a mut Lexer,
     curr_token: Option<TokenType>,
     peek_token: Option<TokenType>,
-    peek_errors: Vec<String>,
 }
 
 #[derive(PartialOrd, PartialEq, Debug)]
@@ -40,12 +39,11 @@ impl Display for Presedence {
 }
 
 impl<'a> Parser<'a> {
-    fn new(lexer: &'_ mut Lexer) -> Parser {
+    pub fn new(lexer: &'_ mut Lexer) -> Parser {
         let mut parser = Parser {
             lexer,
             curr_token: None,
             peek_token: None,
-            peek_errors: vec![],
         };
 
         parser.next_token();
@@ -75,7 +73,6 @@ impl<'a> Parser<'a> {
             self.next_token();
             true
         } else {
-            //self.peek_error(token_type);
             false
         }
     }
@@ -112,7 +109,7 @@ impl<'a> Parser<'a> {
     fn peek_precedence(&self) -> Presedence {
         match self.peek_token {
             Some(TokenType::EQ) => Presedence::EQUALS,
-            Some(TokenType::NOT_EQ) => Presedence::EQUALS,
+            Some(TokenType::NOTEQ) => Presedence::EQUALS,
             Some(TokenType::LT) => Presedence::LESSGREATER,
             Some(TokenType::GT) => Presedence::LESSGREATER,
             Some(TokenType::PLUS) => Presedence::SUM,
@@ -127,7 +124,7 @@ impl<'a> Parser<'a> {
     fn curr_precendence(&self) -> Presedence {
         match self.curr_token {
             Some(TokenType::EQ) => Presedence::EQUALS,
-            Some(TokenType::NOT_EQ) => Presedence::EQUALS,
+            Some(TokenType::NOTEQ) => Presedence::EQUALS,
             Some(TokenType::LT) => Presedence::LESSGREATER,
             Some(TokenType::GT) => Presedence::LESSGREATER,
             Some(TokenType::PLUS) => Presedence::SUM,
@@ -137,17 +134,6 @@ impl<'a> Parser<'a> {
             Some(TokenType::LPAREN) => Presedence::CALL,
             _ => Presedence::LOWEST,
         }
-    }
-
-    fn peek_error(&mut self, token_type: TokenType) {
-        let msg = format!(
-            "expected next token to be {:?}, got {:?} instead",
-            token_type, self.peek_token
-        );
-
-        self.peek_errors.push(msg); // not sure if i want to actually keep the errors here or just
-                                    // print them and move on
-        println!("peek_errors: {:?}", self.peek_errors);
     }
 
     //-------------------- Parsing statment functions --------------------//
@@ -218,7 +204,7 @@ impl<'a> Parser<'a> {
                 Some(TokenType::SLASH) => self.parse_infix_expression(left_exp.clone()),
                 Some(TokenType::ASTERISK) => self.parse_infix_expression(left_exp.clone()),
                 Some(TokenType::EQ) => self.parse_infix_expression(left_exp.clone()),
-                Some(TokenType::NOT_EQ) => self.parse_infix_expression(left_exp.clone()),
+                Some(TokenType::NOTEQ) => self.parse_infix_expression(left_exp.clone()),
                 Some(TokenType::LT) => self.parse_infix_expression(left_exp.clone()),
                 Some(TokenType::GT) => self.parse_infix_expression(left_exp.clone()),
                 Some(TokenType::LPAREN) => self.parse_call_expression(left_exp.clone()),
@@ -290,7 +276,7 @@ impl<'a> Parser<'a> {
             Some(TokenType::SLASH) => TokenType::SLASH,
             Some(TokenType::ASTERISK) => TokenType::ASTERISK,
             Some(TokenType::EQ) => TokenType::EQ,
-            Some(TokenType::NOT_EQ) => TokenType::NOT_EQ,
+            Some(TokenType::NOTEQ) => TokenType::NOTEQ,
             Some(TokenType::LT) => TokenType::LT,
             Some(TokenType::GT) => TokenType::GT,
             Some(TokenType::LPAREN) => TokenType::LPAREN,

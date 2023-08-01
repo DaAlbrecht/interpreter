@@ -19,7 +19,7 @@ pub enum TokenType {
     GT,
     LT,
     EQ,
-    NOT_EQ,
+    NOTEQ,
 
     // Delimiters
     COMMA,
@@ -56,7 +56,7 @@ impl Display for TokenType {
             TokenType::GT => write!(f, ">"),
             TokenType::LT => write!(f, "<"),
             TokenType::EQ => write!(f, "=="),
-            TokenType::NOT_EQ => write!(f, "!="),
+            TokenType::NOTEQ => write!(f, "!="),
             TokenType::COMMA => write!(f, ","),
             TokenType::SEMICOLON => write!(f, ";"),
             TokenType::LPAREN => write!(f, "("),

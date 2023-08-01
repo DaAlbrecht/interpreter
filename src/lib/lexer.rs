@@ -1,5 +1,3 @@
-use std::{print, println};
-
 use super::tokens::TokenType;
 
 pub struct Lexer {
@@ -59,7 +57,7 @@ impl Lexer {
             b'!' => match self.peek() {
                 b'=' => {
                     self.read_char();
-                    TokenType::NOT_EQ
+                    TokenType::NOTEQ
                 }
                 _ => TokenType::BANG,
             },
@@ -243,7 +241,7 @@ mod tests {
             TokenType::INT("10".into()),
             TokenType::SEMICOLON,
             TokenType::INT("10".into()),
-            TokenType::NOT_EQ,
+            TokenType::NOTEQ,
             TokenType::INT("9".into()),
             TokenType::SEMICOLON,
             //--------------------------------//
