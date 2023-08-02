@@ -1,4 +1,4 @@
-use crate::lib::evaluator::Evaluator;
+use crate::interpreter::evaluator::Evaluator;
 
 use super::lexer::Lexer;
 use super::parser::Parser;

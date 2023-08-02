@@ -134,7 +134,7 @@ impl Lexer {
 mod tests {
     use std::{println, vec};
 
-    use crate::lib::tokens::TokenType;
+    use crate::interpreter::tokens::TokenType;
 
     use super::Lexer;
 

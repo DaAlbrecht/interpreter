@@ -1,7 +1,8 @@
-mod lib;
+mod interpreter;
 
 fn main() {
     println!("Hello, world!");
 
-    lib::repl::start();
+    interpreter::repl::start();
+ 
 }

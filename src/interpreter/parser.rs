@@ -463,8 +463,8 @@ impl<'a> Parser<'a> {
 
 #[cfg(test)]
 mod test {
-    use crate::lib::lexer::Lexer;
-    use crate::lib::tokens::TokenType;
+    use crate::interpreter::lexer::Lexer;
+    use crate::interpreter::tokens::TokenType;
 
     use super::ast;
     use super::Parser;
