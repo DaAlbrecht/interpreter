@@ -341,19 +341,19 @@ impl<'a> Parser<'a> {
 
                 Ok(ast::AllExpression::IfExpression(ast::IfExpression {
                     condition: Box::new(condition?),
-                    consequence: consequence?,
-                    alternative: Some(alternative?),
+                    consequence: Box::new(consequence?),
+                    alternative: Some(Box::new(alternative?)),
                 }))
             }
             _ => Ok(ast::AllExpression::IfExpression(ast::IfExpression {
                 condition: Box::new(condition?),
-                consequence: consequence?,
+                consequence: Box::new(consequence?),
                 alternative: None,
             })),
         }
     }
 
-    fn parse_block_statement(&mut self) -> Result<ast::BlockStatement, String> {
+    fn parse_block_statement(&mut self) -> Result<ast::Statement, String> {
         let mut statements: Vec<ast::Statement> = vec![];
 
         self.next_token();
@@ -368,7 +368,9 @@ impl<'a> Parser<'a> {
             self.next_token();
         }
 
-        Ok(ast::BlockStatement { statements })
+        Ok(ast::Statement::BlockStatement(ast::BlockStatement {
+            statements,
+        }))
     }
 
     fn parse_function_literal(&mut self) -> Result<ast::AllExpression, String> {
@@ -386,7 +388,7 @@ impl<'a> Parser<'a> {
 
         Ok(ast::AllExpression::FunctionLiteral(ast::FunctionLiteral {
             parameters: params,
-            body,
+            body: Box::new(body),
         }))
     }
 
@@ -797,9 +799,17 @@ mod test {
             {
                 ast::AllExpression::IfExpression(if_expression) => {
                     assert_eq!(if_expression.condition.to_string(), "(x < y)".to_string());
-                    assert_eq!(if_expression.consequence.statements.len(), 1);
-                    let consequence = if_expression.consequence.statements[0].clone();
-                    match consequence {
+
+                    let if_statements = match *if_expression.consequence {
+                        ast::Statement::BlockStatement(block_statement) => {
+                            block_statement.statements
+                        }
+                        _ => panic!("not a block statement"),
+                    };
+
+                    assert_eq!(if_statements.len(), 1);
+
+                    match if_statements[0].clone() {
                         ast::Statement::ExpressionStatement(expression_statement) => {
                             match expression_statement {
                                 ast::AllExpression::Identifier(identifier) => {
@@ -838,9 +848,14 @@ mod test {
             {
                 ast::AllExpression::IfExpression(if_expression) => {
                     assert_eq!(if_expression.condition.to_string(), "(x < y)".to_string());
-                    assert_eq!(if_expression.consequence.statements.len(), 1);
-                    let consequence = if_expression.consequence.statements[0].clone();
-                    match consequence {
+                    let if_statements = match *if_expression.consequence {
+                        ast::Statement::BlockStatement(block_statement) => {
+                            block_statement.statements
+                        }
+                        _ => panic!("not a block statement"),
+                    };
+                    assert_eq!(if_statements.len(), 1);
+                    match if_statements[0].clone() {
                         ast::Statement::ExpressionStatement(expression_statement) => {
                             match expression_statement {
                                 ast::AllExpression::Identifier(identifier) => {
@@ -853,9 +868,15 @@ mod test {
                     }
                     assert!(if_expression.alternative.is_some());
                     let alternative = if_expression.alternative.unwrap();
-                    assert_eq!(alternative.statements.len(), 1);
-                    let alternative_statement = alternative.statements[0].clone();
-                    match alternative_statement {
+                    let alternative_statements = match *alternative {
+                        ast::Statement::BlockStatement(block_statement) => {
+                            block_statement.statements
+                        }
+                        _ => panic!("not a block statement"),
+                    };
+                    assert_eq!(alternative_statements.len(), 1);
+
+                    match alternative_statements[0].clone() {
                         ast::Statement::ExpressionStatement(expression_statement) => {
                             match expression_statement {
                                 ast::AllExpression::Identifier(identifier) => {
@@ -896,9 +917,15 @@ mod test {
                     assert_eq!(parameters.len(), 2);
                     assert_eq!(parameters[0].to_string(), "x".to_string());
                     assert_eq!(parameters[1].to_string(), "y".to_string());
-                    assert_eq!(function_literal.body.statements.len(), 1);
-                    let body_statement = function_literal.body.statements[0].clone();
-                    match body_statement {
+
+                    let body_statements = match *function_literal.body {
+                        ast::Statement::BlockStatement(block_statement) => {
+                            block_statement.statements
+                        }
+                        _ => panic!("not a block statement"),
+                    };
+                    assert_eq!(body_statements.len(), 1);
+                    match body_statements[0].clone() {
                         ast::Statement::ExpressionStatement(expression_statement) => {
                             match expression_statement {
                                 ast::AllExpression::InfixExpression(infix_expression) => {

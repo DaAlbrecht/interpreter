@@ -12,6 +12,7 @@ pub enum Statement {
     LetStatement(LetStatement),
     ReturnStatement(AllExpression),
     ExpressionStatement(AllExpression),
+    BlockStatement(BlockStatement),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -56,14 +57,14 @@ pub struct InfixExpression {
 #[derive(Debug, Clone, PartialEq)]
 pub struct IfExpression {
     pub condition: Box<AllExpression>,
-    pub consequence: BlockStatement,
-    pub alternative: Option<BlockStatement>,
+    pub consequence: Box<Statement>,
+    pub alternative: Option<Box<Statement>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionLiteral {
     pub parameters: Option<Vec<String>>,
-    pub body: BlockStatement,
+    pub body: Box<Statement>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -93,6 +94,9 @@ impl Display for Statement {
             }
             Statement::ExpressionStatement(expression_statement) => {
                 write!(f, "{}", expression_statement.to_string())
+            }
+            Statement::BlockStatement(block_statement) => {
+                write!(f, "{}", block_statement.to_string())
             }
         }
     }
