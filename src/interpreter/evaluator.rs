@@ -1,3 +1,5 @@
+use crate::interpreter::object::Function;
+
 use super::ast;
 use super::ast::AllExpression;
 use super::ast::Statement;
@@ -5,17 +7,18 @@ use super::environment::Environment;
 use super::object::Object;
 use super::tokens::TokenType;
 use std::cell::RefCell;
+use std::rc::Rc;
 
-pub struct Evaluator<'a> {
-    env: &'a RefCell<Environment>,
+pub struct Evaluator {
+    env: Rc<RefCell<Environment>>,
 }
 
-impl<'a> Evaluator<'a> {
-    pub fn new(env: &'a RefCell<Environment>) -> Evaluator {
+impl Evaluator {
+    pub fn new(env: Rc<RefCell<Environment>>) -> Evaluator {
         Evaluator { env }
     }
 
-    pub fn eval(&self, program: &ast::Program) -> Object {
+    pub fn eval(&mut self, program: &ast::Program) -> Object {
         let mut result = Object::Null;
         for statement in &program.statements {
             result = self.eval_statement(statement);
@@ -41,7 +44,7 @@ impl<'a> Evaluator<'a> {
         Object::Error(message.to_string())
     }
 
-    fn eval_statement(&self, statement: &Statement) -> Object {
+    fn eval_statement(&mut self, statement: &Statement) -> Object {
         match statement {
             Statement::ExpressionStatement(expression_statement) => {
                 self.eval_expression(&expression_statement)
@@ -69,7 +72,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn eval_expression(&self, expression: &AllExpression) -> Object {
+    fn eval_expression(&mut self, expression: &AllExpression) -> Object {
         match expression {
             AllExpression::Int(int) => Object::Int(*int as i64),
             AllExpression::Boolean(bool) => Object::Boolean(*bool),
@@ -94,11 +97,40 @@ impl<'a> Evaluator<'a> {
             }
             AllExpression::IfExpression(if_expression) => self.eval_if_expression(&if_expression),
             AllExpression::Identifier(identifier) => self.eval_identifier(&identifier),
-            _ => Object::Null,
+            AllExpression::FunctionLiteral(function_literal) => {
+                let parameters = function_literal.parameters.clone();
+                let body = *function_literal.body.clone();
+                match body {
+                    ast::Statement::BlockStatement(block_statement) => {
+                        Object::FunctionLiteral(Function {
+                            parameters,
+                            body: block_statement,
+                            env: self.env.clone(),
+                        })
+                    }
+                    _ => self.new_error("function body must be a block statement"),
+                }
+            }
+            AllExpression::CallExpression(call_expression) => {
+                let function = self.eval_expression(&call_expression.function);
+                if let Object::Error(_) = function {
+                    return function;
+                }
+                match &call_expression.arguments {
+                    Some(arguments) => {
+                        let arguments: Vec<Object> = arguments
+                            .iter()
+                            .map(|argument| self.eval_expression(argument))
+                            .collect();
+                        self.apply_function(&function, &arguments)
+                    }
+                    None => self.new_error("function arguments must be provided"),
+                }
+            }
         }
     }
 
-    fn eval_prefix_expression(&self, prefix_expression: &ast::PrefixExpression) -> Object {
+    fn eval_prefix_expression(&mut self, prefix_expression: &ast::PrefixExpression) -> Object {
         let right = self.eval_expression(&prefix_expression.right);
         match right {
             Object::Error(_) => right,
@@ -160,7 +192,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn eval_if_expression(&self, if_expression: &ast::IfExpression) -> Object {
+    fn eval_if_expression(&mut self, if_expression: &ast::IfExpression) -> Object {
         let condition = self.eval_expression(&if_expression.condition);
         match condition {
             Object::Error(_) => return condition,
@@ -176,7 +208,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn eval_block_statement(&self, block_statement: &ast::BlockStatement) -> Object {
+    fn eval_block_statement(&mut self, block_statement: &ast::BlockStatement) -> Object {
         let mut result = Object::Null;
         for statement in &block_statement.statements {
             result = self.eval_statement(statement);
@@ -191,8 +223,48 @@ impl<'a> Evaluator<'a> {
 
     fn eval_identifier(&self, identifier: &str) -> Object {
         match self.env.borrow().get(identifier) {
-            Some(value) => value,
+            Some((object, _)) => object,
             None => self.new_error(&format!("identifier not found: {}", identifier)),
+        }
+    }
+
+    fn apply_function(&mut self, function: &Object, arguments: &[Object]) -> Object {
+        match function {
+            Object::FunctionLiteral(function) => {
+                let mut extended_env = Environment::new_enclosed_environment(function.env.clone());
+                match function.parameters.clone() {
+                    Some(parameters) => {
+                        if parameters.len() != arguments.len() {
+                            return self.new_error(&format!(
+                                "wrong number of arguments: expected={}, got={}",
+                                parameters.len(),
+                                arguments.len()
+                            ));
+                        }
+                        for (parameter, argument) in parameters.iter().zip(arguments.iter()) {
+                            extended_env.set(parameter, argument.clone());
+                        }
+                    }
+                    None => {
+                        if arguments.len() != 0 {
+                            return self.new_error(&format!(
+                                "wrong number of arguments: expected=0, got={}",
+                                arguments.len()
+                            ));
+                        }
+                    }
+                }
+
+                let current_env = self.env.clone();
+                self.env = Rc::new(RefCell::new(extended_env));
+
+                let object = self.eval_block_statement(&function.body);
+
+                self.env = current_env;
+
+                object
+            }
+            _ => self.new_error(&format!("not a function: {}", function)),
         }
     }
 }
@@ -200,8 +272,11 @@ impl<'a> Evaluator<'a> {
 #[cfg(test)]
 mod tests {
     use std::cell::RefCell;
+    use std::rc::Rc;
 
+    use crate::interpreter::ast::{AllExpression, BlockStatement, InfixExpression, Statement};
     use crate::interpreter::environment::Environment;
+    use crate::interpreter::tokens::TokenType;
 
     use super::super::lexer::Lexer;
     use super::super::object::Object;
@@ -212,8 +287,8 @@ mod tests {
         let mut lexer = Lexer::new(input.into());
         let mut parser = Parser::new(&mut lexer);
         let program = parser.parse_program().unwrap();
-        let env = RefCell::new(Environment::new());
-        let evaluator = Evaluator::new(&env);
+        let env = Rc::new(RefCell::new(Environment::new()));
+        let mut evaluator = Evaluator::new(env);
         evaluator.eval(&program)
     }
 
@@ -407,6 +482,56 @@ mod tests {
                 "let a = 5; let b = a; let c = a + b + 5; c;",
                 Object::Int(15),
             ),
+        ];
+
+        for (input, expected) in tests {
+            let evaluated = test_eval(input);
+            match expected {
+                Object::Int(int) => test_integer_object(evaluated, int),
+                _ => panic!("object is not integer. got={:?}", evaluated),
+            }
+        }
+    }
+
+    #[test]
+    fn test_eval_function_object() {
+        let input = "fn(x) { x + 2; };";
+        let evaluated = test_eval(input);
+        match evaluated {
+            Object::FunctionLiteral(function) => {
+                let params = function.parameters.unwrap();
+                assert_eq!(params.len(), 1);
+                assert_eq!(params[0].to_string(), "x");
+                let block_statement = BlockStatement {
+                    statements: vec![Statement::ExpressionStatement(
+                        AllExpression::InfixExpression(InfixExpression {
+                            left: Box::new(AllExpression::Identifier("x".to_string())),
+                            operator: TokenType::PLUS,
+                            right: Box::new(AllExpression::Int(2)),
+                        }),
+                    )],
+                };
+                assert_eq!(function.body, block_statement);
+            }
+            _ => panic!("object is not function. got={:?}", evaluated),
+        }
+    }
+
+    #[test]
+    fn test_eval_function_application() {
+        let tests = vec![
+            ("let identity = fn(x) { x; }; identity(5);", Object::Int(5)),
+            (
+                "let identity = fn(x) { return x; }; identity(5);",
+                Object::Int(5),
+            ),
+            ("let double = fn(x) { x * 2; }; double(5);", Object::Int(10)),
+            ("let add = fn(x, y) { x + y; }; add(5, 5);", Object::Int(10)),
+            (
+                "let add = fn(x, y) { x + y; }; add(5 + 5, add(5, 5));",
+                Object::Int(20),
+            ),
+            ("fn(x) { x; }(5)", Object::Int(5)),
         ];
 
         for (input, expected) in tests {

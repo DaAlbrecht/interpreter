@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::rc::Rc;
 
 use crate::interpreter::environment::Environment;
 use crate::interpreter::evaluator::Evaluator;
@@ -12,7 +13,7 @@ pub fn start() {
     println!("Feel free to type in commands");
     println!("");
 
-    let env = RefCell::new(Environment::new());
+    let env = Rc::new(RefCell::new(Environment::new()));
     loop {
         let mut input = String::new();
         std::io::stdin()
@@ -24,7 +25,7 @@ pub fn start() {
 
         match program {
             Ok(program) => {
-                let evaluator = Evaluator::new(&env);
+                let mut evaluator = Evaluator::new(env.clone());
                 let evaluated = evaluator.eval(&program);
                 match evaluated {
                     Object::ReturnValue(obj) => println!("{}", obj),
@@ -32,6 +33,7 @@ pub fn start() {
                     Object::Int(int) => println!("{}", int),
                     Object::Boolean(boolean) => println!("{}", boolean),
                     Object::Null => println!("null"),
+                    _ => println!(""),
                 }
             }
             Err(error) => {

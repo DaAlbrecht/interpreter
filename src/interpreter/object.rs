@@ -1,4 +1,6 @@
-use std::fmt::Display;
+use std::{cell::RefCell, fmt::Display, rc::Rc};
+
+use super::{ast::BlockStatement, environment::Environment};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Object {
@@ -7,6 +9,14 @@ pub enum Object {
     Null,
     ReturnValue(Box<Object>),
     Error(String),
+    FunctionLiteral(Function),
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Function {
+    pub parameters: Option<Vec<String>>,
+    pub body: BlockStatement,
+    pub env: Rc<RefCell<Environment>>,
 }
 
 impl Display for Object {
@@ -17,6 +27,16 @@ impl Display for Object {
             Object::Null => write!(f, "NULL"),
             Object::ReturnValue(obj) => write!(f, "{}", obj),
             Object::Error(msg) => write!(f, "ERROR: {}", msg),
+            Object::FunctionLiteral(func) => {
+                let mut params = String::new();
+                if let Some(parameters) = &func.parameters {
+                    for param in parameters {
+                        params.push_str(&param);
+                        params.push_str(", ");
+                    }
+                }
+                write!(f, "fn({}) {{\n{}\n}}", params, func.body)
+            }
         }
     }
 }
