@@ -185,6 +185,7 @@ impl<'a> Parser<'a> {
         let prefix = match self.curr_token {
             Some(TokenType::IDENT(_)) => self.parse_identifier(),
             Some(TokenType::INT(_)) => self.parse_integer_literal(),
+            Some(TokenType::STRING(_)) => self.parse_string_literal(),
             Some(TokenType::BANG) => self.parse_prefix_expression(),
             Some(TokenType::MINUS) => self.parse_prefix_expression(),
             Some(TokenType::TRUE) => self.parse_boolean(),
@@ -231,6 +232,13 @@ impl<'a> Parser<'a> {
                 Ok(ast::AllExpression::Int(value))
             }
             _ => Err(String::from("no integer found")),
+        }
+    }
+
+    fn parse_string_literal(&mut self) -> Result<ast::AllExpression, String> {
+        match self.curr_token {
+            Some(TokenType::STRING(ref value)) => Ok(ast::AllExpression::String(value.clone())),
+            _ => Err(String::from("no string literal found")),
         }
     }
 
@@ -1010,6 +1018,33 @@ mod test {
                     assert_eq!(arguments[2].to_string(), "(4 + 5)".to_string());
                 }
                 _ => panic!("not a call expression"),
+            },
+            _ => panic!("not an expression statement"),
+        }
+    }
+
+    #[test]
+    fn test_string_literal_expression() {
+        let input = "\"hello world\"".to_string();
+        let mut lexer = Lexer::new(input.to_string());
+        let mut parser = Parser::new(&mut lexer);
+        let program = parser.parse_program();
+
+        assert!(program.is_ok());
+
+        let program = program.unwrap();
+
+        assert_eq!(program.statements.len(), 1);
+
+        let statement = program.statements[0].clone();
+
+        match statement {
+            ast::Statement::ExpressionStatement(expression_statement) => match expression_statement
+            {
+                ast::AllExpression::String(string_literal) => {
+                    assert_eq!(string_literal, "hello world".to_string());
+                }
+                _ => panic!("not a string literal"),
             },
             _ => panic!("not an expression statement"),
         }

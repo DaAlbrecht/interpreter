@@ -67,6 +67,9 @@ impl Lexer {
             b'>' => TokenType::GT,
             b'{' => TokenType::LBRACE,
             b'}' => TokenType::RBRACE,
+            b'"' => {
+                return self.read_string();
+            }
             b'a'..=b'z' | b'A'..=b'Z' | b'_' => {
                 let ident = self.read_identifier();
                 return match ident.as_str() {
@@ -128,11 +131,30 @@ impl Lexer {
             self.input[self.read_position]
         }
     }
+
+    fn read_string(&mut self) -> TokenType {
+        let position = self.position + 1;
+        self.read_char();
+
+        while self.ch != b'"' || self.ch == 0 {
+            self.read_char();
+        }
+
+        let token = TokenType::STRING(
+            self.input[position..self.position]
+                .iter()
+                .map(|&c| c as char)
+                .collect(),
+        );
+
+        self.read_char();
+        token
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{println, vec};
+    use std::vec;
 
     use crate::interpreter::tokens::TokenType;
 
@@ -160,9 +182,9 @@ mod tests {
 
             10 == 10;
             10 != 9;
+            "foobar"
+            "foo bar"
         "###;
-
-        println!("{}", input);
 
         let tokens = vec![
             TokenType::LET,
@@ -244,6 +266,8 @@ mod tests {
             TokenType::NOTEQ,
             TokenType::INT("9".into()),
             TokenType::SEMICOLON,
+            TokenType::STRING("foobar".into()),
+            TokenType::STRING("foo bar".into()),
             //--------------------------------//
             TokenType::EOF,
         ];
@@ -252,7 +276,6 @@ mod tests {
 
         for token in tokens {
             let next_tok = lexer.next_token();
-            println!("expected: {:?}, got: {:?}", token, next_tok);
             assert_eq!(token, next_tok);
         }
     }

@@ -18,6 +18,7 @@ pub enum Statement {
 #[derive(Debug, Clone, PartialEq)]
 pub enum AllExpression {
     Int(usize),
+    String(String),
     Identifier(String),
     PrefixExpression(PrefixExpression),
     InfixExpression(InfixExpression),
@@ -191,6 +192,7 @@ impl Display for AllExpression {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             AllExpression::Int(int) => write!(f, "{}", int),
+            AllExpression::String(string) => write!(f, "{}", string),
             AllExpression::Identifier(identifier) => write!(f, "{}", identifier),
             AllExpression::PrefixExpression(prefix_expression) => {
                 write!(f, "{}", prefix_expression.to_string())

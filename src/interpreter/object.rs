@@ -5,6 +5,7 @@ use super::{ast::BlockStatement, environment::Environment};
 #[derive(Debug, PartialEq, Clone)]
 pub enum Object {
     Int(i64),
+    String(String),
     Boolean(bool),
     Null,
     ReturnValue(Box<Object>),
@@ -23,6 +24,7 @@ impl Display for Object {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Object::Int(_) => write!(f, "INTEGER"),
+            Object::String(_) => write!(f, "STRING"),
             Object::Boolean(_) => write!(f, "BOOLEAN"),
             Object::Null => write!(f, "NULL"),
             Object::ReturnValue(obj) => write!(f, "{}", obj),

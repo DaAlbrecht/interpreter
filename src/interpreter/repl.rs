@@ -32,7 +32,7 @@ pub fn start() {
                     Object::Error(msg) => println!("{}", msg),
                     Object::Int(int) => println!("{}", int),
                     Object::Boolean(boolean) => println!("{}", boolean),
-                    Object::Null => println!("null"),
+                    Object::String(string) => println!("{}", string),
                     _ => println!(""),
                 }
             }

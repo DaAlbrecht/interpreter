@@ -8,6 +8,7 @@ pub enum TokenType {
     // Identifiers + literals
     IDENT(String),
     INT(String),
+    STRING(String),
 
     // Operators
     ASSIGN,
@@ -70,6 +71,7 @@ impl Display for TokenType {
             TokenType::IF => write!(f, "IF"),
             TokenType::ELSE => write!(f, "ELSE"),
             TokenType::RETURN => write!(f, "RETURN"),
+            TokenType::STRING(s) => write!(f, "STRING({})", s),
         }
     }
 }
