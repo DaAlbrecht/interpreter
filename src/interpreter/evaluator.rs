@@ -3,6 +3,7 @@ use crate::interpreter::object::Function;
 use super::ast;
 use super::ast::AllExpression;
 use super::ast::Statement;
+use super::builtins;
 use super::environment::Environment;
 use super::object::Object;
 use super::tokens::TokenType;
@@ -123,9 +124,9 @@ impl Evaluator {
                             .iter()
                             .map(|argument| self.eval_expression(argument))
                             .collect();
-                        self.apply_function(&function, &arguments)
+                        self.apply_function(&function, Some(arguments))
                     }
-                    None => self.new_error("function arguments must be provided"),
+                    None => self.apply_function(&function, None),
                 }
             }
         }
@@ -236,16 +237,26 @@ impl Evaluator {
     fn eval_identifier(&self, identifier: &str) -> Object {
         match self.env.borrow().get(identifier) {
             Some((object, _)) => object,
-            None => self.new_error(&format!("identifier not found: {}", identifier)),
+            None => match builtins::get_builtins().get(identifier) {
+                Some(builtin) => builtin.clone(),
+                None => self.new_error(&format!("identifier not found: {}", identifier)),
+            },
         }
     }
 
-    fn apply_function(&mut self, function: &Object, arguments: &[Object]) -> Object {
+    fn apply_function(&mut self, function: &Object, arguments: Option<Vec<Object>>) -> Object {
         match function {
             Object::FunctionLiteral(function) => {
                 let mut extended_env = Environment::new_enclosed_environment(function.env.clone());
                 match function.parameters.clone() {
                     Some(parameters) => {
+                        if arguments.is_none() {
+                            return self.new_error(&format!(
+                                "wrong number of arguments: expected={}, got=0",
+                                parameters.len()
+                            ));
+                        }
+                        let arguments = arguments.unwrap();
                         if parameters.len() != arguments.len() {
                             return self.new_error(&format!(
                                 "wrong number of arguments: expected={}, got={}",
@@ -258,10 +269,10 @@ impl Evaluator {
                         }
                     }
                     None => {
-                        if arguments.len() != 0 {
+                        if arguments.is_some() {
                             return self.new_error(&format!(
                                 "wrong number of arguments: expected=0, got={}",
-                                arguments.len()
+                                arguments.unwrap().len()
                             ));
                         }
                     }
@@ -276,6 +287,7 @@ impl Evaluator {
 
                 object
             }
+            Object::BuiltinFunction(builtin) => builtin(arguments),
             _ => self.new_error(&format!("not a function: {}", function)),
         }
     }
@@ -573,6 +585,35 @@ mod tests {
         match evaluated {
             Object::String(string) => assert_eq!(string, "Hello World!"),
             _ => panic!("object is not string. got={:?}", evaluated),
+        }
+    }
+
+    #[test]
+    fn test_builtin_functions() {
+        let tests = vec![
+            ("len(\"\")", Object::Int(0)),
+            ("len(\"four\")", Object::Int(4)),
+            ("len(\"hello world\")", Object::Int(11)),
+            (
+                "len(1)",
+                Object::Error("argument to `len` not supported, got INTEGER".to_string()),
+            ),
+            (
+                "len(\"one\", \"two\")",
+                Object::Error("wrong number of arguments. got=2, want=1".to_string()),
+            ),
+        ];
+
+        for (input, expected) in tests {
+            let evaluated = test_eval(input);
+            match expected {
+                Object::Int(int) => test_integer_object(evaluated, int),
+                Object::Error(error) => match evaluated {
+                    Object::Error(evaluated_error) => assert_eq!(error, evaluated_error),
+                    _ => panic!("object is not error. got={:?}", evaluated),
+                },
+                _ => panic!("object is not integer or error. got={:?}", evaluated),
+            }
         }
     }
 }

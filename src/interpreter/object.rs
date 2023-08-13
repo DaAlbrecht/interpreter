@@ -11,6 +11,7 @@ pub enum Object {
     ReturnValue(Box<Object>),
     Error(String),
     FunctionLiteral(Function),
+    BuiltinFunction(fn(Option<Vec<Object>>) -> Object),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -39,6 +40,7 @@ impl Display for Object {
                 }
                 write!(f, "fn({}) {{\n{}\n}}", params, func.body)
             }
+            Object::BuiltinFunction(_) => write!(f, "BUILTIN FUNCTION"),
         }
     }
 }
