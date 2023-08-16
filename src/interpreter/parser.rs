@@ -21,6 +21,7 @@ enum Presedence {
     PRODUCT,     // *
     PREFIX,      // -X or !X
     CALL,        // myFunction(X)
+    INDEX,       // array[index]
 }
 
 impl Display for Presedence {
@@ -33,6 +34,7 @@ impl Display for Presedence {
             Presedence::PRODUCT => "PRODUCT",
             Presedence::PREFIX => "PREFIX",
             Presedence::CALL => "CALL",
+            Presedence::INDEX => "INDEX",
         };
         write!(f, "{}", s)
     }
@@ -103,7 +105,7 @@ impl<'a> Parser<'a> {
             self.next_token();
         }
 
-        Ok(Statement::ExpressionStatement(expression.unwrap()))
+        Ok(Statement::ExpressionStatement(expression?))
     }
 
     fn peek_precedence(&self) -> Presedence {
@@ -117,6 +119,7 @@ impl<'a> Parser<'a> {
             Some(TokenType::SLASH) => Presedence::PRODUCT,
             Some(TokenType::ASTERISK) => Presedence::PRODUCT,
             Some(TokenType::LPAREN) => Presedence::CALL,
+            Some(TokenType::LBRACKET) => Presedence::INDEX,
             _ => Presedence::LOWEST,
         }
     }
@@ -132,6 +135,7 @@ impl<'a> Parser<'a> {
             Some(TokenType::SLASH) => Presedence::PRODUCT,
             Some(TokenType::ASTERISK) => Presedence::PRODUCT,
             Some(TokenType::LPAREN) => Presedence::CALL,
+            Some(TokenType::LBRACKET) => Presedence::INDEX,
             _ => Presedence::LOWEST,
         }
     }
@@ -193,22 +197,38 @@ impl<'a> Parser<'a> {
             Some(TokenType::LPAREN) => self.parse_grouped_expression(),
             Some(TokenType::IF) => self.parse_if_expression(),
             Some(TokenType::FUNCTION) => self.parse_function_literal(),
-            _ => return Err(String::from("no prefix found")),
+            Some(TokenType::LBRACKET) => self.parse_array_literal(),
+            _ => {
+                return Err(format!(
+                    "no prefix found for token {}",
+                    self.curr_token.clone().unwrap()
+                ))
+            }
         };
 
         let mut left_exp = prefix?;
 
         while !self.peek_token_is(TokenType::SEMICOLON) && presedence < self.peek_precedence() {
             let infix = match self.peek_token {
-                Some(TokenType::PLUS) => self.parse_infix_expression(left_exp.clone()),
-                Some(TokenType::MINUS) => self.parse_infix_expression(left_exp.clone()),
-                Some(TokenType::SLASH) => self.parse_infix_expression(left_exp.clone()),
-                Some(TokenType::ASTERISK) => self.parse_infix_expression(left_exp.clone()),
-                Some(TokenType::EQ) => self.parse_infix_expression(left_exp.clone()),
-                Some(TokenType::NOTEQ) => self.parse_infix_expression(left_exp.clone()),
-                Some(TokenType::LT) => self.parse_infix_expression(left_exp.clone()),
-                Some(TokenType::GT) => self.parse_infix_expression(left_exp.clone()),
-                Some(TokenType::LPAREN) => self.parse_call_expression(left_exp.clone()),
+                Some(TokenType::PLUS)
+                | Some(TokenType::MINUS)
+                | Some(TokenType::SLASH)
+                | Some(TokenType::ASTERISK)
+                | Some(TokenType::EQ)
+                | Some(TokenType::NOTEQ)
+                | Some(TokenType::LT)
+                | Some(TokenType::GT) => {
+                    self.next_token();
+                    self.parse_infix_expression(left_exp.clone())
+                }
+                Some(TokenType::LPAREN) => {
+                    self.next_token();
+                    self.parse_call_expression(left_exp.clone())
+                }
+                Some(TokenType::LBRACKET) => {
+                    self.next_token();
+                    self.parse_index_expression(left_exp.clone())
+                }
                 _ => Err(String::from("no infix found")),
             };
 
@@ -276,8 +296,6 @@ impl<'a> Parser<'a> {
         &mut self,
         left: ast::AllExpression,
     ) -> Result<ast::AllExpression, String> {
-        self.next_token();
-
         let operator = match self.curr_token {
             Some(TokenType::PLUS) => TokenType::PLUS,
             Some(TokenType::MINUS) => TokenType::MINUS,
@@ -436,25 +454,27 @@ impl<'a> Parser<'a> {
         &mut self,
         function: ast::AllExpression,
     ) -> Result<ast::AllExpression, String> {
-        let arguments = self.parse_call_arguments()?;
+        let arguments = self.parse_expression_list(TokenType::RPAREN)?;
         Ok(ast::AllExpression::CallExpression(ast::CallExpression {
             function: Box::new(function),
             arguments,
         }))
     }
 
-    fn parse_call_arguments(&mut self) -> Result<Option<Vec<ast::AllExpression>>, String> {
+    fn parse_expression_list(
+        &mut self,
+        end: TokenType,
+    ) -> Result<Option<Vec<ast::AllExpression>>, String> {
         let mut arguments: Vec<ast::AllExpression> = vec![];
-        self.next_token();
 
-        if self.peek_token_is(TokenType::RPAREN) {
+        if self.peek_token_is(end.clone()) {
             self.next_token();
             return Ok(None);
         }
 
         self.next_token();
 
-        arguments.push(self.parse_expression(Presedence::LOWEST).unwrap());
+        arguments.push(self.parse_expression(Presedence::LOWEST)?);
 
         while self.peek_token_is(TokenType::COMMA) {
             self.next_token();
@@ -463,11 +483,35 @@ impl<'a> Parser<'a> {
             arguments.push(self.parse_expression(Presedence::LOWEST).unwrap());
         }
 
-        if !self.expect_peek(TokenType::RPAREN) {
+        if !self.expect_peek(end) {
             return Err(String::from("no right paren found"));
         }
 
         Ok(Some(arguments))
+    }
+
+    fn parse_array_literal(&mut self) -> Result<ast::AllExpression, String> {
+        let elements = self.parse_expression_list(TokenType::RBRACKET)?;
+
+        Ok(ast::AllExpression::ArrayLiteral(elements))
+    }
+
+    fn parse_index_expression(
+        &mut self,
+        left: ast::AllExpression,
+    ) -> Result<ast::AllExpression, String> {
+        self.next_token();
+
+        let index = self.parse_expression(Presedence::LOWEST)?;
+
+        if !self.expect_peek(TokenType::RBRACKET) {
+            return Err(String::from("no right bracket found"));
+        }
+
+        Ok(ast::AllExpression::IndexExpression(ast::IndexExpression {
+            left: Box::new(left),
+            index: Box::new(index),
+        }))
     }
 }
 
@@ -731,18 +775,30 @@ mod test {
                 "add(a + b + c * d / f + g)".to_string(),
                 "add((((a + b) + ((c * d) / f)) + g))".to_string(),
             ),
+            (
+                "a * [1, 2, 3, 4][b * c] * d".to_string(),
+                "((a * ([1, 2, 3, 4][(b * c)])) * d)".to_string(),
+            ),
+            (
+                "add(a * b[2], b[1], 2 * [1, 2][1])".to_string(),
+                "add((a * (b[2])), (b[1]), (2 * ([1, 2][1])))".to_string(),
+            ),
         ];
 
         for (input, expected) in tests {
+            println!("input: {}", input);
             let mut lexer = Lexer::new(input);
 
             let mut parser = Parser::new(&mut lexer);
 
             let program = parser.parse_program();
 
-            assert!(program.is_ok());
-
-            let program = program.unwrap();
+            let program = match program {
+                Ok(program) => program,
+                Err(error) => {
+                    panic!("parse error: {}", error);
+                }
+            };
 
             assert_eq!(program.to_string(), expected);
         }
@@ -1045,6 +1101,78 @@ mod test {
                     assert_eq!(string_literal, "hello world".to_string());
                 }
                 _ => panic!("not a string literal"),
+            },
+            _ => panic!("not an expression statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_array_litterals() {
+        let input = "[1, 2 * 2, 3 + 3]".to_string();
+
+        let mut lexer = Lexer::new(input.to_string());
+        let mut parser = Parser::new(&mut lexer);
+
+        let program = parser.parse_program();
+
+        let program = match program {
+            Ok(program) => program,
+            Err(error) => {
+                panic!("parse error: {}", error);
+            }
+        };
+
+        assert_eq!(program.statements.len(), 1);
+
+        let statement = program.statements[0].clone();
+
+        match statement {
+            ast::Statement::ExpressionStatement(expression_statement) => match expression_statement
+            {
+                ast::AllExpression::ArrayLiteral(elements) => {
+                    let elements = match elements {
+                        Some(elements) => elements,
+                        None => panic!("no elements"),
+                    };
+                    assert_eq!(elements.len(), 3);
+                    assert_eq!(elements[0].to_string(), "1".to_string());
+                    assert_eq!(elements[1].to_string(), "(2 * 2)".to_string());
+                    assert_eq!(elements[2].to_string(), "(3 + 3)".to_string());
+                }
+                _ => panic!("not an array literal"),
+            },
+            _ => panic!("not an expression statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_index_expressions() {
+        let input = "myArray[1 + 1]".to_string();
+
+        let mut lexer = Lexer::new(input.to_string());
+        let mut parser = Parser::new(&mut lexer);
+
+        let program = parser.parse_program();
+
+        let program = match program {
+            Ok(program) => program,
+            Err(error) => {
+                panic!("parse error: {}", error);
+            }
+        };
+
+        assert_eq!(program.statements.len(), 1);
+
+        let statement = program.statements[0].clone();
+
+        match statement {
+            ast::Statement::ExpressionStatement(expression_statement) => match expression_statement
+            {
+                ast::AllExpression::IndexExpression(index_expression) => {
+                    assert_eq!(index_expression.left.to_string(), "myArray".to_string());
+                    assert_eq!(index_expression.index.to_string(), "(1 + 1)".to_string());
+                }
+                _ => panic!("not an index expression"),
             },
             _ => panic!("not an expression statement"),
         }

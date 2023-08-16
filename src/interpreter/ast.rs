@@ -26,6 +26,8 @@ pub enum AllExpression {
     IfExpression(IfExpression),
     FunctionLiteral(FunctionLiteral),
     CallExpression(CallExpression),
+    ArrayLiteral(Option<Vec<AllExpression>>),
+    IndexExpression(IndexExpression),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -74,6 +76,11 @@ pub struct CallExpression {
     pub arguments: Option<Vec<AllExpression>>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct IndexExpression {
+    pub left: Box<AllExpression>,
+    pub index: Box<AllExpression>,
+}
 //----------------- Display -----------------//
 
 impl Display for Program {
@@ -188,6 +195,12 @@ impl Display for CallExpression {
     }
 }
 
+impl Display for IndexExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "({}[{}])", self.left.to_string(), self.index.to_string())
+    }
+}
+
 impl Display for AllExpression {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -209,6 +222,24 @@ impl Display for AllExpression {
             }
             AllExpression::CallExpression(call_expression) => {
                 write!(f, "{}", call_expression.to_string())
+            }
+            AllExpression::ArrayLiteral(array_literal) => match array_literal {
+                Some(array_literal) => {
+                    let mut s = String::new();
+                    s.push_str("[");
+                    for (i, element) in array_literal.iter().enumerate() {
+                        s.push_str(&element.to_string());
+                        if i != array_literal.len() - 1 {
+                            s.push_str(", ");
+                        }
+                    }
+                    s.push_str("]");
+                    write!(f, "{}", s)
+                }
+                None => write!(f, "[]"),
+            },
+            AllExpression::IndexExpression(index_expression) => {
+                write!(f, "{}", index_expression.to_string())
             }
         }
     }

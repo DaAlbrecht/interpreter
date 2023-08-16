@@ -67,6 +67,8 @@ impl Lexer {
             b'>' => TokenType::GT,
             b'{' => TokenType::LBRACE,
             b'}' => TokenType::RBRACE,
+            b'[' => TokenType::LBRACKET,
+            b']' => TokenType::RBRACKET,
             b'"' => {
                 return self.read_string();
             }
@@ -184,6 +186,7 @@ mod tests {
             10 != 9;
             "foobar"
             "foo bar"
+            [1, 2];
         "###;
 
         let tokens = vec![
@@ -268,6 +271,12 @@ mod tests {
             TokenType::SEMICOLON,
             TokenType::STRING("foobar".into()),
             TokenType::STRING("foo bar".into()),
+            TokenType::LBRACKET,
+            TokenType::INT("1".into()),
+            TokenType::COMMA,
+            TokenType::INT("2".into()),
+            TokenType::RBRACKET,
+            TokenType::SEMICOLON,
             //--------------------------------//
             TokenType::EOF,
         ];

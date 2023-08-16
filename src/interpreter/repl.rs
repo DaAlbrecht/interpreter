@@ -33,7 +33,19 @@ pub fn start() {
                     Object::Int(int) => println!("{}", int),
                     Object::Boolean(boolean) => println!("{}", boolean),
                     Object::String(string) => println!("{}", string),
-                    _ => println!(""),
+                    Object::Null => println!("null"),
+                    Object::FunctionLiteral(function_literal) => {
+                        println!("{}", function_literal.to_string())
+                    }
+                    Object::Array(elements) => println!(
+                        "[{}]",
+                        elements
+                            .iter()
+                            .map(|e| e.to_string())
+                            .collect::<Vec<String>>()
+                            .join(", ")
+                    ),
+                    _ => continue,
                 }
             }
             Err(error) => {

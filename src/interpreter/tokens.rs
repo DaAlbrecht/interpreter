@@ -30,6 +30,8 @@ pub enum TokenType {
     RPAREN,
     LBRACE,
     RBRACE,
+    LBRACKET,
+    RBRACKET,
 
     // Keywords
     FUNCTION,
@@ -72,6 +74,8 @@ impl Display for TokenType {
             TokenType::ELSE => write!(f, "ELSE"),
             TokenType::RETURN => write!(f, "RETURN"),
             TokenType::STRING(s) => write!(f, "STRING({})", s),
+            TokenType::LBRACKET => write!(f, "["),
+            TokenType::RBRACKET => write!(f, "]"),
         }
     }
 }

@@ -12,6 +12,7 @@ pub enum Object {
     Error(String),
     FunctionLiteral(Function),
     BuiltinFunction(fn(Option<Vec<Object>>) -> Object),
+    Array(Vec<Object>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -41,6 +42,27 @@ impl Display for Object {
                 write!(f, "fn({}) {{\n{}\n}}", params, func.body)
             }
             Object::BuiltinFunction(_) => write!(f, "BUILTIN FUNCTION"),
+            Object::Array(elements) => {
+                let mut elements_str = String::new();
+                for element in elements {
+                    elements_str.push_str(&element.to_string());
+                    elements_str.push_str(", ");
+                }
+                write!(f, "[{}]", elements_str)
+            }
         }
+    }
+}
+
+impl Display for Function {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut params = String::new();
+        if let Some(parameters) = &self.parameters {
+            for param in parameters {
+                params.push_str(&param);
+                params.push_str(", ");
+            }
+        }
+        write!(f, "fn({}) {{\n{}\n}}", params, self.body)
     }
 }

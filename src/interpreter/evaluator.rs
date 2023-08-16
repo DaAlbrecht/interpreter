@@ -129,6 +129,29 @@ impl Evaluator {
                     None => self.apply_function(&function, None),
                 }
             }
+            AllExpression::ArrayLiteral(elements) => match elements {
+                Some(elements) => {
+                    let elements: Vec<Object> = elements
+                        .iter()
+                        .map(|element| self.eval_expression(element))
+                        .collect();
+                    Object::Array(elements)
+                }
+                None => Object::Array(vec![]),
+            },
+            AllExpression::IndexExpression(index_expression) => {
+                let left = self.eval_expression(&index_expression.left);
+                if let Object::Error(_) = left {
+                    return left;
+                }
+
+                let index = self.eval_expression(&index_expression.index);
+                if let Object::Error(_) = index {
+                    return index;
+                }
+
+                self.eval_index_expression(&left, &index)
+            }
         }
     }
 
@@ -290,6 +313,23 @@ impl Evaluator {
             Object::BuiltinFunction(builtin) => builtin(arguments),
             _ => self.new_error(&format!("not a function: {}", function)),
         }
+    }
+
+    fn eval_index_expression(&mut self, left: &Object, index: &Object) -> Object {
+        match (left, index) {
+            (Object::Array(elements), Object::Int(index)) => {
+                self.eval_array_index_expression(elements, *index)
+            }
+            _ => self.new_error(&format!("index operator not supported: {}", left)),
+        }
+    }
+
+    fn eval_array_index_expression(&mut self, elements: &[Object], index: i64) -> Object {
+        let max = elements.len() as i64 - 1;
+        if index < 0 || index > max {
+            return Object::Null;
+        }
+        elements[index as usize].clone()
     }
 }
 
@@ -613,6 +653,52 @@ mod tests {
                     _ => panic!("object is not error. got={:?}", evaluated),
                 },
                 _ => panic!("object is not integer or error. got={:?}", evaluated),
+            }
+        }
+    }
+
+    #[test]
+    fn test_array_literals() {
+        let input = "[1, 2 * 2, 3 + 3]";
+        let evaluated = test_eval(input);
+        match evaluated {
+            Object::Array(elements) => {
+                assert_eq!(elements.len(), 3);
+                test_integer_object(elements[0].clone(), 1);
+                test_integer_object(elements[1].clone(), 4);
+                test_integer_object(elements[2].clone(), 6);
+            }
+            _ => panic!("object is not array. got={:?}", evaluated),
+        }
+    }
+
+    #[test]
+    fn test_array_index_expressions() {
+        let tests = vec![
+            ("[1, 2, 3][0]", Object::Int(1)),
+            ("[1, 2, 3][1]", Object::Int(2)),
+            ("[1, 2, 3][2]", Object::Int(3)),
+            ("let i = 0; [1][i];", Object::Int(1)),
+            ("[1, 2, 3][1 + 1];", Object::Int(3)),
+            ("let myArray = [1, 2, 3]; myArray[2];", Object::Int(3)),
+            (
+                "let myArray = [1, 2, 3]; myArray[0] + myArray[1] + myArray[2];",
+                Object::Int(6),
+            ),
+            (
+                "let myArray = [1, 2, 3]; let i = myArray[0]; myArray[i]",
+                Object::Int(2),
+            ),
+            ("[1, 2, 3][3]", Object::Null),
+            ("[1, 2, 3][-1]", Object::Null),
+        ];
+
+        for (input, expected) in tests {
+            let evaluated = test_eval(input);
+            match expected {
+                Object::Int(int) => test_integer_object(evaluated, int),
+                Object::Null => test_null_object(evaluated),
+                _ => panic!("object is not integer or null. got={:?}", evaluated),
             }
         }
     }
