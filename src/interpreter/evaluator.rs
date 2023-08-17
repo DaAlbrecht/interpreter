@@ -6,7 +6,7 @@ use super::ast::Statement;
 use super::builtins;
 use super::environment::Environment;
 use super::object::Object;
-use super::tokens::TokenType;
+use super::{object::TypeName, tokens::TokenType};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -164,7 +164,8 @@ impl Evaluator {
                 TokenType::MINUS => self.eval_minus_prefix_operator_expression(&right),
                 _ => self.new_error(&format!(
                     "unknown operator: {}{}",
-                    prefix_expression.operator, right
+                    prefix_expression.operator,
+                    right.type_name()
                 )),
             },
         }
@@ -181,7 +182,7 @@ impl Evaluator {
     fn eval_minus_prefix_operator_expression(&self, object: &Object) -> Object {
         match object {
             Object::Int(int) => Object::Int(-int),
-            _ => self.new_error(&format!("unknown operator: -{}", object)),
+            _ => self.new_error(&format!("unknown operator: -{}", object.type_name())),
         }
     }
 
@@ -198,9 +199,7 @@ impl Evaluator {
                 TokenType::NOTEQ => Object::Boolean(left != right),
                 _ => self.new_error(&format!(
                     "unknown operator: {} {} {}",
-                    Object::Int(*left),
-                    operator,
-                    Object::Int(*right)
+                    "INTEGER", operator, "INTEGER"
                 )),
             },
             (Object::Boolean(left), Object::Boolean(right)) => match operator {
@@ -208,9 +207,7 @@ impl Evaluator {
                 TokenType::NOTEQ => Object::Boolean(left != right),
                 _ => self.new_error(&format!(
                     "unknown operator: {} {} {}",
-                    Object::Boolean(*left),
-                    operator,
-                    Object::Boolean(*right)
+                    "BOOLEAN", operator, "BOOLEAN"
                 )),
             },
             (Object::String(left), Object::String(right)) => match operator {
@@ -219,12 +216,15 @@ impl Evaluator {
                 TokenType::NOTEQ => Object::Boolean(left != right),
                 _ => self.new_error(&format!(
                     "unknown operator: {} {} {}",
-                    Object::String(left.clone()),
-                    operator,
-                    Object::String(right.clone())
+                    "STRING", operator, "STRING"
                 )),
             },
-            _ => self.new_error(&format!("type mismatch: {} {} {}", left, operator, right)),
+            _ => self.new_error(&format!(
+                "type mismatch: {} {} {}",
+                left.type_name(),
+                operator,
+                right.type_name()
+            )),
         }
     }
 
@@ -311,7 +311,7 @@ impl Evaluator {
                 object
             }
             Object::BuiltinFunction(builtin) => builtin(arguments),
-            _ => self.new_error(&format!("not a function: {}", function)),
+            _ => self.new_error(&format!("not a function: {}", function.type_name())),
         }
     }
 
@@ -320,7 +320,10 @@ impl Evaluator {
             (Object::Array(elements), Object::Int(index)) => {
                 self.eval_array_index_expression(elements, *index)
             }
-            _ => self.new_error(&format!("index operator not supported: {}", left)),
+            _ => self.new_error(&format!(
+                "index operator not supported: {}",
+                left.type_name()
+            )),
         }
     }
 
