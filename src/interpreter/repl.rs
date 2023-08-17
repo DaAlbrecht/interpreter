@@ -1,9 +1,9 @@
 use std::cell::RefCell;
+use std::io::Write;
 use std::rc::Rc;
 
 use crate::interpreter::environment::Environment;
 use crate::interpreter::evaluator::Evaluator;
-use crate::interpreter::object::Object;
 
 use super::lexer::Lexer;
 use super::parser::Parser;
@@ -11,10 +11,11 @@ use super::parser::Parser;
 pub fn start() {
     println!("Welcome to the Monkey programming language!");
     println!("Feel free to type in commands");
-    println!("");
 
     let env = Rc::new(RefCell::new(Environment::new()));
     loop {
+        print!(">> ");
+        std::io::stdout().flush().unwrap();
         let mut input = String::new();
         std::io::stdin()
             .read_line(&mut input)
@@ -27,26 +28,7 @@ pub fn start() {
             Ok(program) => {
                 let mut evaluator = Evaluator::new(env.clone());
                 let evaluated = evaluator.eval(&program);
-                match evaluated {
-                    Object::ReturnValue(obj) => println!("{}", obj),
-                    Object::Error(msg) => println!("{}", msg),
-                    Object::Int(int) => println!("{}", int),
-                    Object::Boolean(boolean) => println!("{}", boolean),
-                    Object::String(string) => println!("{}", string),
-                    Object::Null => println!("null"),
-                    Object::FunctionLiteral(function_literal) => {
-                        println!("{}", function_literal.to_string())
-                    }
-                    Object::Array(elements) => println!(
-                        "[{}]",
-                        elements
-                            .iter()
-                            .map(|e| e.to_string())
-                            .collect::<Vec<String>>()
-                            .join(", ")
-                    ),
-                    _ => continue,
-                }
+                println!("{}", evaluated);
             }
             Err(error) => {
                 let monkey_face = r#"
