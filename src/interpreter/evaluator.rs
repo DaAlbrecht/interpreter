@@ -19,14 +19,16 @@ impl Evaluator {
         Evaluator { env }
     }
 
-    pub fn eval(&mut self, program: &ast::Program) -> Object {
-        let mut result = Object::Null;
+    pub fn eval(&mut self, program: &ast::Program) -> Option<Object> {
+        let mut result = Some(Object::Null);
         for statement in &program.statements {
-            result = self.eval_statement(statement);
-
+            result = match self.eval_statement(statement) {
+                Some(result) => Some(result),
+                None => None,
+            };
             match result {
-                Object::ReturnValue(object) => return *object,
-                Object::Error(_) => return result,
+                Some(Object::ReturnValue(object)) => return Some(*object),
+                Some(Object::Error(_)) => return result,
                 _ => (),
             }
         }
@@ -45,10 +47,10 @@ impl Evaluator {
         Object::Error(message.to_string())
     }
 
-    fn eval_statement(&mut self, statement: &Statement) -> Object {
+    fn eval_statement(&mut self, statement: &Statement) -> Option<Object> {
         match statement {
             Statement::ExpressionStatement(expression_statement) => {
-                self.eval_expression(&expression_statement)
+                Some(self.eval_expression(&expression_statement))
             }
             Statement::BlockStatement(block_statement) => {
                 self.eval_block_statement(&block_statement)
@@ -56,19 +58,16 @@ impl Evaluator {
             Statement::ReturnStatement(return_statement) => {
                 let value = self.eval_expression(&return_statement);
                 match value {
-                    Object::Error(_) => value,
-                    _ => Object::ReturnValue(Box::new(value)),
+                    Object::Error(_) => Some(value),
+                    _ => Some(Object::ReturnValue(Box::new(value))),
                 }
             }
             Statement::LetStatement(let_statement) => {
                 let value = self.eval_expression(&let_statement.value);
-                if let Object::Error(_) = value {
-                    return value;
+                match value {
+                    Object::Error(_) => Some(value),
+                    _ => self.env.borrow_mut().set(&let_statement.name, value),
                 }
-                self.env
-                    .borrow_mut()
-                    .set(&let_statement.name, value.clone());
-                value
             }
         }
     }
@@ -234,9 +233,9 @@ impl Evaluator {
             Object::Error(_) => return condition,
             _ => {
                 if self.is_truthy(&condition) {
-                    self.eval_statement(&if_expression.consequence)
+                    self.eval_statement(&if_expression.consequence).unwrap()
                 } else if let Some(alternative) = &if_expression.alternative {
-                    self.eval_statement(alternative)
+                    self.eval_statement(alternative).unwrap()
                 } else {
                     Object::Null
                 }
@@ -244,13 +243,13 @@ impl Evaluator {
         }
     }
 
-    fn eval_block_statement(&mut self, block_statement: &ast::BlockStatement) -> Object {
-        let mut result = Object::Null;
+    fn eval_block_statement(&mut self, block_statement: &ast::BlockStatement) -> Option<Object> {
+        let mut result = Some(Object::Null);
         for statement in &block_statement.statements {
             result = self.eval_statement(statement);
 
             match result {
-                Object::ReturnValue(_) | Object::Error(_) => return result,
+                Some(Object::ReturnValue(_)) | Some(Object::Error(_)) => return result,
                 _ => (),
             }
         }
@@ -304,7 +303,7 @@ impl Evaluator {
                 let current_env = self.env.clone();
                 self.env = Rc::new(RefCell::new(extended_env));
 
-                let object = self.eval_block_statement(&function.body);
+                let object = self.eval_block_statement(&function.body).unwrap();
 
                 self.env = current_env;
 
@@ -350,13 +349,15 @@ mod tests {
     use super::super::parser::Parser;
     use super::Evaluator;
 
-    fn test_eval(input: &str) -> Object {
+    fn test_eval(input: &str) -> Option<Object> {
         let mut lexer = Lexer::new(input.into());
         let mut parser = Parser::new(&mut lexer);
         let program = parser.parse_program().unwrap();
         let env = Rc::new(RefCell::new(Environment::new()));
         let mut evaluator = Evaluator::new(env);
-        evaluator.eval(&program)
+        let eval = evaluator.eval(&program);
+        dbg!(&eval);
+        eval
     }
 
     #[test]
@@ -380,7 +381,7 @@ mod tests {
         ];
 
         for (input, expected) in tests {
-            let evaluated = test_eval(input);
+            let evaluated = test_eval(input).unwrap();
             test_integer_object(evaluated, expected);
         }
     }
@@ -417,7 +418,7 @@ mod tests {
         ];
 
         for (input, expected) in tests {
-            let evaluated = test_eval(input);
+            let evaluated = test_eval(input).unwrap();
             test_boolean_object(evaluated, expected);
         }
     }
@@ -441,7 +442,7 @@ mod tests {
         ];
 
         for (input, expected) in tests {
-            let evaluated = test_eval(input);
+            let evaluated = test_eval(input).unwrap();
             test_boolean_object(evaluated, expected);
         }
     }
@@ -459,7 +460,7 @@ mod tests {
         ];
 
         for (input, expected) in tests {
-            let evaluated = test_eval(input);
+            let evaluated = test_eval(input).unwrap();
             match expected {
                 Object::Int(int) => test_integer_object(evaluated, int),
                 Object::Null => test_null_object(evaluated),
@@ -496,7 +497,7 @@ mod tests {
         ];
 
         for (input, expected) in tests {
-            let evaluated = test_eval(input);
+            let evaluated = test_eval(input).unwrap();
             match expected {
                 Object::Int(int) => test_integer_object(evaluated, int),
                 _ => panic!("object is not integer. got={:?}", evaluated),
@@ -532,7 +533,7 @@ mod tests {
         ];
 
         for (input, expected) in tests {
-            let evaluated = test_eval(input);
+            let evaluated = test_eval(input).unwrap();
             match evaluated {
                 Object::Error(error) => assert_eq!(error, expected),
                 _ => panic!("no error object returned. got={:?}", evaluated),
@@ -553,7 +554,8 @@ mod tests {
         ];
 
         for (input, expected) in tests {
-            let evaluated = test_eval(input);
+            dbg!(&input);
+            let evaluated = test_eval(input).unwrap();
             match expected {
                 Object::Int(int) => test_integer_object(evaluated, int),
                 _ => panic!("object is not integer. got={:?}", evaluated),
@@ -564,7 +566,7 @@ mod tests {
     #[test]
     fn test_eval_function_object() {
         let input = "fn(x) { x + 2; };";
-        let evaluated = test_eval(input);
+        let evaluated = test_eval(input).unwrap();
         match evaluated {
             Object::FunctionLiteral(function) => {
                 let params = function.parameters.unwrap();
@@ -603,7 +605,7 @@ mod tests {
         ];
 
         for (input, expected) in tests {
-            let evaluated = test_eval(input);
+            let evaluated = test_eval(input).unwrap();
             match expected {
                 Object::Int(int) => test_integer_object(evaluated, int),
                 _ => panic!("object is not integer. got={:?}", evaluated),
@@ -614,7 +616,7 @@ mod tests {
     #[test]
     fn test_eval_string_literal() {
         let input = "\"Hello World!\"";
-        let evaluated = test_eval(input);
+        let evaluated = test_eval(input).unwrap();
         match evaluated {
             Object::String(string) => assert_eq!(string, "Hello World!"),
             _ => panic!("object is not string. got={:?}", evaluated),
@@ -624,7 +626,7 @@ mod tests {
     #[test]
     fn test_eval_string_concatenation() {
         let input = "\"Hello\" + \" \" + \"World!\"";
-        let evaluated = test_eval(input);
+        let evaluated = test_eval(input).unwrap();
         match evaluated {
             Object::String(string) => assert_eq!(string, "Hello World!"),
             _ => panic!("object is not string. got={:?}", evaluated),
@@ -648,7 +650,7 @@ mod tests {
         ];
 
         for (input, expected) in tests {
-            let evaluated = test_eval(input);
+            let evaluated = test_eval(input).unwrap();
             match expected {
                 Object::Int(int) => test_integer_object(evaluated, int),
                 Object::Error(error) => match evaluated {
@@ -663,7 +665,7 @@ mod tests {
     #[test]
     fn test_array_literals() {
         let input = "[1, 2 * 2, 3 + 3]";
-        let evaluated = test_eval(input);
+        let evaluated = test_eval(input).unwrap();
         match evaluated {
             Object::Array(elements) => {
                 assert_eq!(elements.len(), 3);
@@ -697,7 +699,7 @@ mod tests {
         ];
 
         for (input, expected) in tests {
-            let evaluated = test_eval(input);
+            let evaluated = test_eval(input).unwrap();
             match expected {
                 Object::Int(int) => test_integer_object(evaluated, int),
                 Object::Null => test_null_object(evaluated),

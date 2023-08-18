@@ -28,7 +28,10 @@ pub fn start() {
             Ok(program) => {
                 let mut evaluator = Evaluator::new(env.clone());
                 let evaluated = evaluator.eval(&program);
-                println!("{}", evaluated);
+                match evaluated {
+                    Some(evaluated) => println!("{}", evaluated),
+                    None => {}
+                }
             }
             Err(error) => {
                 let monkey_face = r#"
