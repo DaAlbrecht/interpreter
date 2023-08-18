@@ -1,4 +1,4 @@
-use std::{cell::RefCell, fmt::Display, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, fmt::Display, hash::Hash, hash::Hasher, rc::Rc};
 
 use super::{ast::BlockStatement, environment::Environment};
 
@@ -13,6 +13,7 @@ pub enum Object {
     FunctionLiteral(Function),
     BuiltinFunction(fn(Option<Vec<Object>>) -> Object),
     Array(Vec<Object>),
+    Hash(HashMap<Object, Object>),
 }
 
 pub trait TypeName {
@@ -57,6 +58,17 @@ impl Display for Object {
                     }
                 }
                 write!(f, "[{}]", elements_str)
+            }
+            Object::Hash(hash) => {
+                let mut pairs = String::new();
+                for i in 0..hash.len() {
+                    let (key, value) = hash.iter().nth(i).unwrap();
+                    pairs.push_str(&format!("{}: {}", key, value));
+                    if i != hash.len() - 1 {
+                        pairs.push_str(", ");
+                    }
+                }
+                write!(f, "{{{}}}", pairs)
             }
         }
     }
@@ -109,6 +121,26 @@ impl TypeName for Object {
                 }
                 format!("[{}]", elements_str)
             }
+            Object::Hash(hash) => {
+                let mut pairs = String::new();
+                for (key, value) in hash {
+                    pairs.push_str(&format!("{}: {}, ", key, value));
+                }
+                format!("{{{}}}", pairs)
+            }
         }
     }
 }
+
+impl Hash for Object {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            Object::Int(int) => int.hash(state),
+            Object::String(string) => string.hash(state),
+            Object::Boolean(boolean) => boolean.hash(state),
+            _ => "".hash(state),
+        }
+    }
+}
+
+impl Eq for Object {}

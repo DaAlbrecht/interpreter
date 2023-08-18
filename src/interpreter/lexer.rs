@@ -52,6 +52,7 @@ impl Lexer {
             b'(' => TokenType::LPAREN,
             b')' => TokenType::RPAREN,
             b',' => TokenType::COMMA,
+            b':' => TokenType::COLON,
             b'+' => TokenType::PLUS,
             b'-' => TokenType::MINUS,
             b'!' => match self.peek() {
@@ -187,6 +188,7 @@ mod tests {
             "foobar"
             "foo bar"
             [1, 2];
+            {"foo": "bar"}
         "###;
 
         let tokens = vec![
@@ -277,6 +279,11 @@ mod tests {
             TokenType::INT("2".into()),
             TokenType::RBRACKET,
             TokenType::SEMICOLON,
+            TokenType::LBRACE,
+            TokenType::STRING("foo".into()),
+            TokenType::COLON,
+            TokenType::STRING("bar".into()),
+            TokenType::RBRACE,
             //--------------------------------//
             TokenType::EOF,
         ];

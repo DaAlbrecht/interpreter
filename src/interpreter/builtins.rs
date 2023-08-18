@@ -9,6 +9,7 @@ pub fn get_builtins() -> HashMap<String, Object> {
     builtins.insert("last".to_string(), Object::BuiltinFunction(last));
     builtins.insert("rest".to_string(), Object::BuiltinFunction(rest));
     builtins.insert("push".to_string(), Object::BuiltinFunction(push));
+    builtins.insert("puts".to_string(), Object::BuiltinFunction(puts));
     builtins
 }
 
@@ -111,5 +112,17 @@ pub fn push(args: Option<Vec<Object>>) -> Object {
             )),
         },
         None => Object::Error("wrong number of arguments. got=0, want=2".to_string()),
+    }
+}
+
+pub fn puts(args: Option<Vec<Object>>) -> Object {
+    match args {
+        Some(args) => {
+            for arg in args {
+                println!("{}", arg);
+            }
+            Object::Null
+        }
+        None => Object::Error("wrong number of arguments. got=0, want=1".to_string()),
     }
 }

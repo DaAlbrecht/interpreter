@@ -28,6 +28,7 @@ pub enum AllExpression {
     CallExpression(CallExpression),
     ArrayLiteral(Option<Vec<AllExpression>>),
     IndexExpression(IndexExpression),
+    HashLiteral(HashLiteral),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -80,6 +81,11 @@ pub struct CallExpression {
 pub struct IndexExpression {
     pub left: Box<AllExpression>,
     pub index: Box<AllExpression>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct HashLiteral {
+    pub pairs: Vec<(AllExpression, AllExpression)>,
 }
 //----------------- Display -----------------//
 
@@ -201,6 +207,23 @@ impl Display for IndexExpression {
     }
 }
 
+impl Display for HashLiteral {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let mut s = String::new();
+        s.push_str("{");
+        for (i, (key, value)) in self.pairs.iter().enumerate() {
+            s.push_str(&key.to_string());
+            s.push_str(": ");
+            s.push_str(&value.to_string());
+            if i != self.pairs.len() - 1 {
+                s.push_str(", ");
+            }
+        }
+        s.push_str("}");
+        write!(f, "{}", s)
+    }
+}
+
 impl Display for AllExpression {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -240,6 +263,9 @@ impl Display for AllExpression {
             },
             AllExpression::IndexExpression(index_expression) => {
                 write!(f, "{}", index_expression.to_string())
+            }
+            AllExpression::HashLiteral(hash_literal) => {
+                write!(f, "{}", hash_literal.to_string())
             }
         }
     }

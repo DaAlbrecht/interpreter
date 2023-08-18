@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Eq, Hash, PartialOrd, Ord)]
 pub enum TokenType {
     ILLEGAL,
     EOF,
@@ -25,6 +25,7 @@ pub enum TokenType {
     // Delimiters
     COMMA,
     SEMICOLON,
+    COLON,
 
     LPAREN,
     RPAREN,
@@ -76,6 +77,7 @@ impl Display for TokenType {
             TokenType::STRING(s) => write!(f, "STRING({})", s),
             TokenType::LBRACKET => write!(f, "["),
             TokenType::RBRACKET => write!(f, "]"),
+            TokenType::COLON => write!(f, ":"),
         }
     }
 }

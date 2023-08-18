@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use super::{
-    ast::{self, Statement},
+    ast::{self, HashLiteral, Statement},
     lexer::Lexer,
     tokens::TokenType,
 };
@@ -198,6 +198,7 @@ impl<'a> Parser<'a> {
             Some(TokenType::IF) => self.parse_if_expression(),
             Some(TokenType::FUNCTION) => self.parse_function_literal(),
             Some(TokenType::LBRACKET) => self.parse_array_literal(),
+            Some(TokenType::LBRACE) => self.parse_hash_literal(),
             _ => {
                 return Err(format!(
                     "no prefix found for token {}",
@@ -513,15 +514,44 @@ impl<'a> Parser<'a> {
             index: Box::new(index),
         }))
     }
+
+    fn parse_hash_literal(&mut self) -> Result<ast::AllExpression, String> {
+        let mut pairs = vec![];
+
+        while !self.peek_token_is(TokenType::RBRACE) {
+            self.next_token();
+            let key = self.parse_expression(Presedence::LOWEST)?;
+
+            if !self.expect_peek(TokenType::COLON) {
+                return Err(String::from("no colon found"));
+            }
+
+            self.next_token();
+            let value = self.parse_expression(Presedence::LOWEST)?;
+
+            pairs.push((key, value));
+
+            if !self.peek_token_is(TokenType::RBRACE) && !self.expect_peek(TokenType::COMMA) {
+                return Err(String::from("no comma found"));
+            }
+        }
+
+        if !self.expect_peek(TokenType::RBRACE) {
+            return Err(String::from("no right brace found"));
+        }
+
+        Ok(ast::AllExpression::HashLiteral(HashLiteral { pairs }))
+    }
 }
 
 #[cfg(test)]
 mod test {
+    use super::Parser;
+    use crate::interpreter::ast;
+    use crate::interpreter::ast::AllExpression;
+    use crate::interpreter::ast::InfixExpression;
     use crate::interpreter::lexer::Lexer;
     use crate::interpreter::tokens::TokenType;
-
-    use super::ast;
-    use super::Parser;
 
     #[test]
     fn test_let_statements() {
@@ -1173,6 +1203,159 @@ mod test {
                     assert_eq!(index_expression.index.to_string(), "(1 + 1)".to_string());
                 }
                 _ => panic!("not an index expression"),
+            },
+            _ => panic!("not an expression statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_hash_literals_string_keys() {
+        let input = "{\"one\": 1, \"two\": 2, \"three\": 3}".to_string();
+
+        let mut lexer = Lexer::new(input.to_string());
+        let mut parser = Parser::new(&mut lexer);
+
+        let program = parser.parse_program();
+
+        let program = match program {
+            Ok(program) => program,
+            Err(error) => {
+                panic!("parse error: {}", error);
+            }
+        };
+
+        assert_eq!(program.statements.len(), 1);
+
+        let statement = program.statements[0].clone();
+
+        match statement {
+            ast::Statement::ExpressionStatement(expression_statement) => match expression_statement
+            {
+                ast::AllExpression::HashLiteral(hash_literal) => {
+                    let pairs = hash_literal.pairs;
+                    assert_eq!(pairs.len(), 3);
+
+                    let expected = vec![
+                        (
+                            AllExpression::String("one".to_string()),
+                            AllExpression::Int(1),
+                        ),
+                        (
+                            AllExpression::String("two".to_string()),
+                            AllExpression::Int(2),
+                        ),
+                        (
+                            AllExpression::String("three".to_string()),
+                            AllExpression::Int(3),
+                        ),
+                    ];
+
+                    for (i, (key, value)) in pairs.iter().enumerate() {
+                        let (expected_key, expected_value) = &expected[i];
+                        assert_eq!(key.to_string(), expected_key.to_string());
+                        assert_eq!(value.to_string(), expected_value.to_string());
+                    }
+                }
+                _ => panic!("not a hash literal"),
+            },
+            _ => panic!("not an expression statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_empty_hash_literal() {
+        let input = "{}".to_string();
+
+        let mut lexer = Lexer::new(input.to_string());
+        let mut parser = Parser::new(&mut lexer);
+
+        let program = parser.parse_program();
+
+        let program = match program {
+            Ok(program) => program,
+            Err(error) => {
+                panic!("parse error: {}", error);
+            }
+        };
+
+        assert_eq!(program.statements.len(), 1);
+
+        let statement = program.statements[0].clone();
+
+        match statement {
+            ast::Statement::ExpressionStatement(expression_statement) => match expression_statement
+            {
+                ast::AllExpression::HashLiteral(hash_literal) => {
+                    let pairs = hash_literal.pairs;
+                    assert_eq!(pairs.len(), 0);
+                }
+                _ => panic!("not a hash literal"),
+            },
+            _ => panic!("not an expression statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_hash_literals_with_expressions() {
+        let input = "{\"one\": 0 + 1, \"two\": 10 - 8, \"three\": 15 / 5}".to_string();
+
+        let mut lexer = Lexer::new(input.to_string());
+        let mut parser = Parser::new(&mut lexer);
+
+        let program = parser.parse_program();
+
+        let program = match program {
+            Ok(program) => program,
+            Err(error) => {
+                panic!("parse error: {}", error);
+            }
+        };
+
+        assert_eq!(program.statements.len(), 1);
+
+        let statement = program.statements[0].clone();
+
+        match statement {
+            ast::Statement::ExpressionStatement(expression_statement) => match expression_statement
+            {
+                ast::AllExpression::HashLiteral(hash_literal) => {
+                    let pairs = hash_literal.pairs;
+                    assert_eq!(pairs.len(), 3);
+
+                    let expected = vec![
+                        (
+                            AllExpression::String("one".to_string()),
+                            AllExpression::InfixExpression(InfixExpression {
+                                left: Box::new(AllExpression::Int(0)),
+                                operator: TokenType::PLUS,
+                                right: Box::new(AllExpression::Int(1)),
+                            }),
+                        ),
+                        (
+                            AllExpression::String("two".to_string()),
+                            AllExpression::InfixExpression(InfixExpression {
+                                left: Box::new(AllExpression::Int(10)),
+                                operator: TokenType::MINUS,
+                                right: Box::new(AllExpression::Int(8)),
+                            }),
+                        ),
+                        (
+                            AllExpression::String("three".to_string()),
+                            AllExpression::InfixExpression(InfixExpression {
+                                left: Box::new(AllExpression::Int(15)),
+                                operator: TokenType::SLASH,
+                                right: Box::new(AllExpression::Int(5)),
+                            }),
+                        ),
+                    ];
+
+                    for (i, (key, value)) in pairs.iter().enumerate() {
+                        let (expected_key, expected_value) = &expected[i];
+                        assert_eq!(key.to_string(), expected_key.to_string());
+                        assert_eq!(value.to_string(), expected_value.to_string());
+                    }
+                }
+                _ => panic!("not a hash literal"),
             },
             _ => panic!("not an expression statement"),
         }
