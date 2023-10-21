@@ -102,39 +102,33 @@ impl Display for Program {
 impl Display for Statement {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Statement::LetStatement(let_statement) => write!(f, "{}", let_statement.to_string()),
+            Statement::LetStatement(let_statement) => write!(f, "{}", let_statement),
             Statement::ReturnStatement(return_statement) => {
-                write!(f, "{}", return_statement.to_string())
+                write!(f, "{}", return_statement)
             }
             Statement::ExpressionStatement(expression_statement) => {
-                write!(f, "{}", expression_statement.to_string())
+                write!(f, "{}", expression_statement)
             }
             Statement::BlockStatement(block_statement) => {
-                write!(f, "{}", block_statement.to_string())
+                write!(f, "{}", block_statement)
             }
         }
     }
 }
 impl Display for LetStatement {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "let {} = {};", self.name, self.value.to_string())
+        write!(f, "let {} = {};", self.name, self.value)
     }
 }
 impl Display for PrefixExpression {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "({}{})", self.operator, self.right.to_string())
+        write!(f, "({}{})", self.operator, self.right)
     }
 }
 
 impl Display for InfixExpression {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "({} {} {})",
-            self.left.to_string(),
-            self.operator,
-            self.right.to_string()
-        )
+        write!(f, "({} {} {})", self.left, self.operator, self.right)
     }
 }
 
@@ -203,7 +197,7 @@ impl Display for CallExpression {
 
 impl Display for IndexExpression {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "({}[{}])", self.left.to_string(), self.index.to_string())
+        write!(f, "({}[{}])", self.left, self.index)
     }
 }
 
@@ -231,20 +225,20 @@ impl Display for AllExpression {
             AllExpression::String(string) => write!(f, "{}", string),
             AllExpression::Identifier(identifier) => write!(f, "{}", identifier),
             AllExpression::PrefixExpression(prefix_expression) => {
-                write!(f, "{}", prefix_expression.to_string())
+                write!(f, "{}", prefix_expression)
             }
             AllExpression::InfixExpression(infix_expression) => {
-                write!(f, "{}", infix_expression.to_string())
+                write!(f, "{}", infix_expression)
             }
             AllExpression::Boolean(boolean) => write!(f, "{}", boolean),
             AllExpression::IfExpression(if_expression) => {
-                write!(f, "{}", if_expression.to_string())
+                write!(f, "{}", if_expression)
             }
             AllExpression::FunctionLiteral(function_literal) => {
-                write!(f, "{}", function_literal.to_string())
+                write!(f, "{}", function_literal)
             }
             AllExpression::CallExpression(call_expression) => {
-                write!(f, "{}", call_expression.to_string())
+                write!(f, "{}", call_expression)
             }
             AllExpression::ArrayLiteral(array_literal) => match array_literal {
                 Some(array_literal) => {
@@ -262,10 +256,10 @@ impl Display for AllExpression {
                 None => write!(f, "[]"),
             },
             AllExpression::IndexExpression(index_expression) => {
-                write!(f, "{}", index_expression.to_string())
+                write!(f, "{}", index_expression)
             }
             AllExpression::HashLiteral(hash_literal) => {
-                write!(f, "{}", hash_literal.to_string())
+                write!(f, "{}", hash_literal)
             }
         }
     }

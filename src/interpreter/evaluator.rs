@@ -23,10 +23,7 @@ impl Evaluator {
     pub fn eval(&mut self, program: &ast::Program) -> Option<Object> {
         let mut result = Some(Object::Null);
         for statement in &program.statements {
-            result = match self.eval_statement(statement) {
-                Some(result) => Some(result),
-                None => None,
-            };
+            result = self.eval_statement(statement);
             match result {
                 Some(Object::ReturnValue(object)) => return Some(*object),
                 Some(Object::Error(_)) => return result,
@@ -57,7 +54,7 @@ impl Evaluator {
                 self.eval_block_statement(&block_statement)
             }
             Statement::ReturnStatement(return_statement) => {
-                let value = self.eval_expression(&return_statement);
+                let value = self.eval_expression(return_statement);
                 match value {
                     Object::Error(_) => Some(value),
                     _ => Some(Object::ReturnValue(Box::new(value))),
@@ -79,7 +76,7 @@ impl Evaluator {
             AllExpression::String(string) => Object::String(string.clone()),
             AllExpression::Boolean(bool) => Object::Boolean(*bool),
             AllExpression::PrefixExpression(prefix_expression) => {
-                self.eval_prefix_expression(&prefix_expression)
+                self.eval_prefix_expression(prefix_expression)
             }
             AllExpression::InfixExpression(infix_expression) => {
                 let left = self.eval_expression(&infix_expression.left);
@@ -95,10 +92,10 @@ impl Evaluator {
                 }
 
                 let operator = &infix_expression.operator;
-                self.eval_infix_expression(&operator, &left, &right)
+                self.eval_infix_expression(operator, &left, &right)
             }
-            AllExpression::IfExpression(if_expression) => self.eval_if_expression(&if_expression),
-            AllExpression::Identifier(identifier) => self.eval_identifier(&identifier),
+            AllExpression::IfExpression(if_expression) => self.eval_if_expression(if_expression),
+            AllExpression::Identifier(identifier) => self.eval_identifier(identifier),
             AllExpression::FunctionLiteral(function_literal) => {
                 let parameters = function_literal.parameters.clone();
                 let body = *function_literal.body.clone();
@@ -232,7 +229,7 @@ impl Evaluator {
     fn eval_if_expression(&mut self, if_expression: &ast::IfExpression) -> Object {
         let condition = self.eval_expression(&if_expression.condition);
         match condition {
-            Object::Error(_) => return condition,
+            Object::Error(_) => condition,
             _ => {
                 if self.is_truthy(&condition) {
                     self.eval_statement(&if_expression.consequence).unwrap()

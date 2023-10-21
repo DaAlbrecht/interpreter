@@ -79,7 +79,7 @@ impl Display for Function {
         let mut params = String::new();
         if let Some(parameters) = &self.parameters {
             for param in parameters {
-                params.push_str(&param);
+                params.push_str(param);
                 params.push_str(", ");
             }
         }
